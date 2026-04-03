@@ -8,6 +8,7 @@ import { authRouter }      from "../routes/auth";
 import { webhookRouter }   from "../routes/webhooks";
 import { dashboardRouter } from "../routes/dashboard";
 import { adminRouter }     from "../routes/admin";
+import { progressRouter }  from "../routes/progress";
 import { setupVite, serveStatic } from "./vite";
 
 validateEnv();
@@ -40,6 +41,7 @@ app.use("/api/auth",      authRouter);
 app.use("/api/webhooks",  webhookRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/admin",     adminRouter);
+app.use("/api/progress",  progressRouter);
 
 // ─── Frontend (Vite dev middleware or static build) ───────────────────────────
 async function startServer(): Promise<void> {

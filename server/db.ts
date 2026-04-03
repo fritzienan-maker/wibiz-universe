@@ -1,7 +1,7 @@
 // ─── Database client + all query functions (BC360 pattern: one file) ──────────
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool }    from "pg";
-import { eq, desc, asc } from "drizzle-orm";
+import { eq, desc, asc, and } from "drizzle-orm";
 import * as schema from "../drizzle/schema";
 import type { NewUser, NewSyncEvent, NewModule } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -118,6 +118,78 @@ export async function updateModule(id: string, data: Partial<NewModule>) {
 
 export async function deleteModule(id: string) {
   await db.delete(schema.modules).where(eq(schema.modules.id, id));
+}
+
+// ─── Exercise queries ──────────────────────────────────────────────────────────
+export async function listExercisesByModule(moduleId: string, activeOnly = false) {
+  const condition = activeOnly
+    ? and(eq(schema.exercises.moduleId, moduleId), eq(schema.exercises.isActive, true))
+    : eq(schema.exercises.moduleId, moduleId);
+  return db
+    .select()
+    .from(schema.exercises)
+    .where(condition)
+    .orderBy(asc(schema.exercises.orderIndex), asc(schema.exercises.createdAt));
+}
+
+export async function getExerciseById(id: string) {
+  const [ex] = await db.select().from(schema.exercises).where(eq(schema.exercises.id, id));
+  return ex ?? null;
+}
+
+export async function createExercise(data: typeof schema.exercises.$inferInsert) {
+  const [ex] = await db.insert(schema.exercises).values(data).returning();
+  return ex!;
+}
+
+export async function updateExercise(id: string, data: Partial<typeof schema.exercises.$inferInsert>) {
+  const [ex] = await db
+    .update(schema.exercises)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.exercises.id, id))
+    .returning();
+  return ex ?? null;
+}
+
+export async function deleteExercise(id: string) {
+  await db.delete(schema.exercises).where(eq(schema.exercises.id, id));
+}
+
+// ─── Progress queries ─────────────────────────────────────────────────────────
+export async function getCompletedExerciseIds(userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ exerciseId: schema.userProgress.exerciseId })
+    .from(schema.userProgress)
+    .where(eq(schema.userProgress.userId, userId));
+  return new Set(rows.map((r) => r.exerciseId));
+}
+
+export async function markExerciseComplete(userId: string, exerciseId: string) {
+  const existing = await db
+    .select()
+    .from(schema.userProgress)
+    .where(and(eq(schema.userProgress.userId, userId), eq(schema.userProgress.exerciseId, exerciseId)));
+  if (existing.length > 0) return existing[0]!;
+  const [row] = await db.insert(schema.userProgress).values({ userId, exerciseId }).returning();
+  return row!;
+}
+
+export async function getCompletedModuleIds(userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ moduleId: schema.userModuleCompletions.moduleId })
+    .from(schema.userModuleCompletions)
+    .where(eq(schema.userModuleCompletions.userId, userId));
+  return new Set(rows.map((r) => r.moduleId));
+}
+
+export async function markModuleComplete(userId: string, moduleId: string) {
+  const existing = await db
+    .select()
+    .from(schema.userModuleCompletions)
+    .where(and(eq(schema.userModuleCompletions.userId, userId), eq(schema.userModuleCompletions.moduleId, moduleId)));
+  if (existing.length > 0) return existing[0]!;
+  const [row] = await db.insert(schema.userModuleCompletions).values({ userId, moduleId }).returning();
+  return row!;
 }
 
 // ─── Webhook log ───────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import LoginPage    from "./pages/Login";
-import DashboardPage from "./pages/Dashboard";
+import ClientPortal  from "./pages/ClientPortal";
 import AdminPage    from "./pages/Admin";
 import { apiFetch, ApiError } from "./lib/api";
 
@@ -64,7 +64,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route
           path="/dashboard"
-          element={<PrivateRoute><DashboardPage /></PrivateRoute>}
+          element={<PrivateRoute><ClientPortal /></PrivateRoute>}
         />
         <Route
           path="/admin"

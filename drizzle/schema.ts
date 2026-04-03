@@ -84,6 +84,36 @@ export const modules = pgTable("modules", {
   updatedAt:   timestamp("updated_at").defaultNow(),
 });
 
+// ─── Exercises ────────────────────────────────────────────────────────────────
+export const exercises = pgTable("exercises", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  moduleId:    uuid("module_id").notNull(),
+  title:       varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  dayNumber:   integer("day_number"),
+  orderIndex:  integer("order_index").notNull().default(0),
+  isActive:    boolean("is_active").notNull().default(true),
+  createdAt:   timestamp("created_at").defaultNow(),
+  updatedAt:   timestamp("updated_at").defaultNow(),
+});
+
+// ─── User Progress ────────────────────────────────────────────────────────────
+// One row per (user, exercise) pair — created when client confirms completion
+export const userProgress = pgTable("user_progress", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  userId:      uuid("user_id").notNull(),
+  exerciseId:  uuid("exercise_id").notNull(),
+  completedAt: timestamp("completed_at").defaultNow(),
+});
+
+// Module gate confirmations — created when client submits in-portal sign-off
+export const userModuleCompletions = pgTable("user_module_completions", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  userId:      uuid("user_id").notNull(),
+  moduleId:    uuid("module_id").notNull(),
+  confirmedAt: timestamp("confirmed_at").defaultNow(),
+});
+
 // ─── Inferred types ───────────────────────────────────────────────────────────
 export type User         = typeof users.$inferSelect;
 export type NewUser      = typeof users.$inferInsert;

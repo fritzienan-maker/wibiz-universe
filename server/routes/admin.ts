@@ -10,6 +10,11 @@ import {
   createModule,
   updateModule,
   deleteModule,
+  listExercisesByModule,
+  getExerciseById,
+  createExercise,
+  updateExercise,
+  deleteExercise,
 } from "../db";
 
 export const adminRouter = Router();
@@ -107,3 +112,56 @@ adminRouter.delete(
     res.json({ message: "deleted" });
   }
 );
+
+// ─── Exercise CRUD (nested under modules) ────────────────────────────────────
+const exerciseSchema = z.object({
+  title:       z.string().min(1).max(255),
+  description: z.string().optional().nullable(),
+  dayNumber:   z.number().int().positive().optional().nullable(),
+  orderIndex:  z.number().int().min(0).default(0),
+  isActive:    z.boolean().default(true),
+});
+
+// GET /api/admin/modules/:id/exercises
+adminRouter.get("/modules/:id/exercises", async (req, res): Promise<void> => {
+  const mod = await getModuleById(req.params.id!);
+  if (!mod) { res.status(404).json({ error: "Module not found" }); return; }
+  const exs = await listExercisesByModule(req.params.id!);
+  res.json({ exercises: exs });
+});
+
+// POST /api/admin/modules/:id/exercises
+adminRouter.post("/modules/:id/exercises", async (req, res): Promise<void> => {
+  const mod = await getModuleById(req.params.id!);
+  if (!mod) { res.status(404).json({ error: "Module not found" }); return; }
+
+  const parsed = exerciseSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
+    return;
+  }
+  const ex = await createExercise({ ...parsed.data, moduleId: req.params.id! });
+  res.status(201).json({ exercise: ex });
+});
+
+// PUT /api/admin/exercises/:id
+adminRouter.put("/exercises/:id", async (req, res): Promise<void> => {
+  const ex = await getExerciseById(req.params.id!);
+  if (!ex) { res.status(404).json({ error: "Exercise not found" }); return; }
+
+  const parsed = exerciseSchema.partial().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
+    return;
+  }
+  const updated = await updateExercise(req.params.id!, parsed.data);
+  res.json({ exercise: updated });
+});
+
+// DELETE /api/admin/exercises/:id
+adminRouter.delete("/exercises/:id", async (req, res): Promise<void> => {
+  const ex = await getExerciseById(req.params.id!);
+  if (!ex) { res.status(404).json({ error: "Exercise not found" }); return; }
+  await deleteExercise(req.params.id!);
+  res.json({ message: "deleted" });
+});

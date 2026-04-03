@@ -1,6 +1,12 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../_core/auth";
-import { getUserById, listModules } from "../db";
+import {
+  getUserById,
+  listModules,
+  listExercisesByModule,
+  getCompletedExerciseIds,
+  getCompletedModuleIds,
+} from "../db";
 
 export const dashboardRouter = Router();
 
@@ -12,19 +18,82 @@ dashboardRouter.get(
     const user = await getUserById(req.user!.userId);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
-    const allModules = await listModules(true); // active only
+    const [allModules, completedExerciseIds, completedModuleIds] = await Promise.all([
+      listModules(true),
+      getCompletedExerciseIds(req.user!.userId),
+      getCompletedModuleIds(req.user!.userId),
+    ]);
 
-    // Module 1 (lowest orderIndex) is available; all others are locked until
-    // JotForm progress gates are built in Phase 2.
-    const modules = allModules.map((m, i) => ({
-      id:          m.id,
-      title:       m.title,
-      description: m.description,
-      dayStart:    m.dayStart,
-      dayEnd:      m.dayEnd,
-      orderIndex:  m.orderIndex,
-      status:      i === 0 ? "available" : "locked",
-    }));
+    // Fetch exercises for all modules in parallel
+    const exerciseLists = await Promise.all(
+      allModules.map((m) => listExercisesByModule(m.id, true))
+    );
+
+    // Build enriched module list with status and exercise unlock logic
+    let prevGateSubmitted = true; // first module is always available
+
+    const modules = allModules.map((m, i) => {
+      const exs = exerciseLists[i]!;
+      const gateSubmitted = completedModuleIds.has(m.id);
+
+      // Determine module status
+      let status: "available" | "locked" | "complete";
+      if (!prevGateSubmitted) {
+        status = "locked";
+      } else if (gateSubmitted) {
+        status = "complete";
+      } else {
+        status = "available";
+      }
+
+      // Exercises: sequential unlock within available/complete modules
+      const exercises = exs.map((ex, j) => {
+        const isComplete = completedExerciseIds.has(ex.id);
+        let isUnlocked = false;
+        if (status !== "locked") {
+          if (j === 0) {
+            isUnlocked = true;
+          } else {
+            // unlock if the previous exercise is complete
+            isUnlocked = completedExerciseIds.has(exs[j - 1]!.id);
+          }
+        }
+        return {
+          id:          ex.id,
+          title:       ex.title,
+          description: ex.description,
+          dayNumber:   ex.dayNumber,
+          orderIndex:  ex.orderIndex,
+          isComplete,
+          isUnlocked,
+        };
+      });
+
+      const completedCount = exercises.filter((e) => e.isComplete).length;
+      const allExercisesDone = exs.length > 0 && completedCount === exs.length;
+
+      // next module gets prevGateSubmitted based on this module's gate
+      prevGateSubmitted = gateSubmitted;
+
+      return {
+        id:                  m.id,
+        title:               m.title,
+        description:         m.description,
+        dayStart:            m.dayStart,
+        dayEnd:              m.dayEnd,
+        orderIndex:          m.orderIndex,
+        status,
+        gateSubmitted,
+        allExercisesDone,
+        exercises,
+        completedExercises:  completedCount,
+        totalExercises:      exs.length,
+      };
+    });
+
+    const totalExercises    = modules.reduce((s, m) => s + m.totalExercises, 0);
+    const completedExs      = modules.reduce((s, m) => s + m.completedExercises, 0);
+    const completedMods     = modules.filter((m) => m.gateSubmitted).length;
 
     res.json({
       user: {
@@ -38,6 +107,13 @@ dashboardRouter.get(
         hskdRequired: user.hskdRequired,
       },
       modules,
+      stats: {
+        totalExercises,
+        completedExercises: completedExs,
+        completedModules:   completedMods,
+        totalModules:       modules.length,
+        progressPct:        totalExercises > 0 ? Math.round((completedExs / totalExercises) * 100) : 0,
+      },
     });
   }
 );

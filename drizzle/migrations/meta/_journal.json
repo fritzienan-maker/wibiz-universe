@@ -15,6 +15,13 @@
       "when": 1775218805327,
       "tag": "0001_foamy_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775225009130,
+      "tag": "0002_optimal_the_fury",
+      "breakpoints": true
     }
   ]
 }

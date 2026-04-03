@@ -16,6 +16,8 @@ export const ENV = {
   ghlApiKey:         process.env.GHL_API_KEY ?? "",
   ghlLocationId:     process.env.GHL_LOCATION_ID ?? "",
   ghlWebhookSecret:  process.env.GHL_WEBHOOK_SECRET ?? "",
+  // DocuSeal (formal document signing — Client Success Manual, HSKD, operator certs)
+  docusealApiToken:  process.env.DOCUSEAL_API_TOKEN ?? "",
 };
 
 // Startup validation — warns loudly but does not crash (BC360 pattern).

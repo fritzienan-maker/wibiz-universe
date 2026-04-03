@@ -46,6 +46,24 @@ interface ModuleRow {
   updatedAt:   string | null;
 }
 
+interface ExerciseRow {
+  id:          string;
+  moduleId:    string;
+  title:       string;
+  description: string | null;
+  dayNumber:   number | null;
+  orderIndex:  number;
+  isActive:    boolean;
+}
+
+interface ExerciseFormValues {
+  title:       string;
+  description: string;
+  dayNumber:   string;
+  orderIndex:  string;
+  isActive:    boolean;
+}
+
 interface ModuleFormValues {
   title:       string;
   description: string;
@@ -56,6 +74,10 @@ interface ModuleFormValues {
 }
 
 type Tab = "users" | "sync" | "webhooks" | "modules";
+
+const emptyExForm = (): ExerciseFormValues => ({
+  title: "", description: "", dayNumber: "", orderIndex: "0", isActive: true,
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (d: string | null) =>
@@ -229,15 +251,174 @@ function ModuleModal({
   );
 }
 
+// ─── Exercise panel (shown inline under a module row) ─────────────────────────
+function ExercisePanel({ moduleId, onClose }: { moduleId: string; onClose: () => void }) {
+  const [exercises,  setExercises]  = useState<ExerciseRow[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [showForm,   setShowForm]   = useState(false);
+  const [editTarget, setEditTarget] = useState<ExerciseRow | null>(null);
+  const [form,       setForm]       = useState<ExerciseFormValues>(emptyExForm());
+  const [saving,     setSaving]     = useState(false);
+  const [deleting,   setDeleting]   = useState<string | null>(null);
+  const [formErr,    setFormErr]    = useState("");
+
+  const loadExercises = async () => {
+    const data = await apiFetch<{ exercises: ExerciseRow[] }>(`/admin/modules/${moduleId}/exercises`);
+    setExercises(data.exercises);
+  };
+
+  useEffect(() => {
+    loadExercises().finally(() => setLoading(false));
+  }, [moduleId]);
+
+  const openCreate = () => { setEditTarget(null); setForm(emptyExForm()); setFormErr(""); setShowForm(true); };
+  const openEdit   = (ex: ExerciseRow) => {
+    setEditTarget(ex);
+    setForm({ title: ex.title, description: ex.description ?? "", dayNumber: ex.dayNumber?.toString() ?? "", orderIndex: ex.orderIndex.toString(), isActive: ex.isActive });
+    setFormErr("");
+    setShowForm(true);
+  };
+
+  const saveExercise = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim()) { setFormErr("Title is required."); return; }
+    setSaving(true); setFormErr("");
+    try {
+      const body = {
+        title:       form.title.trim(),
+        description: form.description.trim() || null,
+        dayNumber:   form.dayNumber ? parseInt(form.dayNumber) : null,
+        orderIndex:  parseInt(form.orderIndex) || 0,
+        isActive:    form.isActive,
+      };
+      if (editTarget) {
+        await apiFetch(`/admin/exercises/${editTarget.id}`, { method: "PUT", body: JSON.stringify(body) });
+      } else {
+        await apiFetch(`/admin/modules/${moduleId}/exercises`, { method: "POST", body: JSON.stringify(body) });
+      }
+      await loadExercises();
+      setShowForm(false);
+    } catch {
+      setFormErr("Save failed. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteEx = async (id: string) => {
+    if (!confirm("Delete this exercise?")) return;
+    setDeleting(id);
+    try {
+      await apiFetch(`/admin/exercises/${id}`, { method: "DELETE" });
+      setExercises((prev) => prev.filter((e) => e.id !== id));
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  return (
+    <div className="mt-2 ml-4 border-l-2 border-primary/30 pl-4">
+      <div className="flex justify-between items-center mb-3">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Exercises</span>
+        <div className="flex gap-2">
+          <button onClick={openCreate} className="text-xs px-3 py-1 bg-primary/10 text-primary border border-primary/30 rounded-lg hover:bg-primary/20">
+            + Add Exercise
+          </button>
+          <button onClick={onClose} className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground">
+            ✕ Close
+          </button>
+        </div>
+      </div>
+
+      {showForm && (
+        <form onSubmit={saveExercise} className="bg-muted/20 border border-border rounded-lg p-4 mb-4 space-y-3">
+          {formErr && <p className="text-xs text-destructive">{formErr}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-foreground mb-1">Title *</label>
+              <input type="text" value={form.title} onChange={(e) => setForm((f) => ({...f, title: e.target.value}))}
+                placeholder="Day 1 — System orientation and dashboard overview"
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary" required />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1">Day Number</label>
+              <input type="number" min={1} value={form.dayNumber} onChange={(e) => setForm((f) => ({...f, dayNumber: e.target.value}))}
+                placeholder="1" className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1">Order</label>
+              <input type="number" min={0} value={form.orderIndex} onChange={(e) => setForm((f) => ({...f, orderIndex: e.target.value}))}
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-foreground mb-1">Description</label>
+              <input type="text" value={form.description} onChange={(e) => setForm((f) => ({...f, description: e.target.value}))}
+                placeholder="Optional description shown to clients"
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div className="col-span-2 flex items-center gap-2">
+              <input type="checkbox" id="ex-active" checked={form.isActive} onChange={(e) => setForm((f) => ({...f, isActive: e.target.checked}))} className="w-4 h-4 accent-primary" />
+              <label htmlFor="ex-active" className="text-sm text-foreground">Active (visible to clients)</label>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-lg">Cancel</button>
+            <button type="submit" disabled={saving} className="px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+              {saving ? "Saving…" : "Save Exercise"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <p className="text-xs text-muted-foreground py-2">Loading exercises…</p>
+      ) : exercises.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-2">No exercises yet. <button onClick={openCreate} className="text-primary underline">Add the first one.</button></p>
+      ) : (
+        <table className="w-full text-xs mb-2">
+          <thead>
+            <tr className="text-left text-muted-foreground border-b border-border">
+              {["Day", "Title", "Order", "Active", ""].map((h) => (
+                <th key={h} className="pb-1.5 pr-3 font-medium">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {exercises.map((ex) => (
+              <tr key={ex.id} className="border-b border-border/40 hover:bg-muted/10">
+                <td className="py-1.5 pr-3 text-muted-foreground">{ex.dayNumber ?? "—"}</td>
+                <td className="py-1.5 pr-3 text-foreground max-w-xs truncate">{ex.title}</td>
+                <td className="py-1.5 pr-3 text-muted-foreground">{ex.orderIndex}</td>
+                <td className="py-1.5 pr-3">
+                  <span className={`px-1.5 py-0.5 rounded text-xs ${ex.isActive ? "bg-green-900/40 text-green-400" : "bg-muted text-muted-foreground"}`}>
+                    {ex.isActive ? "Active" : "Hidden"}
+                  </span>
+                </td>
+                <td className="py-1.5 flex gap-2">
+                  <button onClick={() => openEdit(ex)} className="text-muted-foreground hover:text-foreground">Edit</button>
+                  <button onClick={() => deleteEx(ex.id)} disabled={deleting === ex.id} className="text-destructive/70 hover:text-destructive disabled:opacity-50">
+                    {deleting === ex.id ? "…" : "Del"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [tab,         setTab]         = useState<Tab>("users");
   const [users,       setUsers]       = useState<UserRow[]>([]);
   const [syncEvents,  setSyncEvents]  = useState<SyncEventRow[]>([]);
   const [webhookLogs, setWebhookLogs] = useState<WebhookLogRow[]>([]);
-  const [modules,     setModules]     = useState<ModuleRow[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState("");
+  const [modules,        setModules]        = useState<ModuleRow[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState("");
+  const [expandedModule, setExpandedModule] = useState<string | null>(null);
 
   // Module modal state
   const [modalOpen,   setModalOpen]   = useState(false);
@@ -464,6 +645,7 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {modules.map((m) => (
+                    <>
                     <tr key={m.id} className="border-b border-border/40 hover:bg-muted/20">
                       <td className="py-3 pr-4 text-muted-foreground font-mono text-xs">{m.orderIndex}</td>
                       <td className="py-3 pr-4 font-medium text-foreground max-w-xs">
@@ -480,6 +662,12 @@ export default function AdminPage() {
                       </td>
                       <td className="py-3 flex gap-2">
                         <button
+                          onClick={() => setExpandedModule(expandedModule === m.id ? null : m.id)}
+                          className={`text-xs px-3 py-1 border rounded-lg ${expandedModule === m.id ? "border-primary/50 text-primary bg-primary/10" : "border-border text-muted-foreground hover:bg-muted/40"}`}
+                        >
+                          Exercises
+                        </button>
+                        <button
                           onClick={() => openEdit(m)}
                           className="text-xs px-3 py-1 border border-border rounded-lg text-foreground hover:bg-muted/40"
                         >
@@ -494,6 +682,14 @@ export default function AdminPage() {
                         </button>
                       </td>
                     </tr>
+                    {expandedModule === m.id && (
+                      <tr key={`${m.id}-ex`} className="bg-muted/10">
+                        <td colSpan={6} className="pb-4 pt-1 px-2">
+                          <ExercisePanel moduleId={m.id} onClose={() => setExpandedModule(null)} />
+                        </td>
+                      </tr>
+                    )}
+                    </>
                   ))}
                   {modules.length === 0 && (
                     <tr>
