@@ -1,0 +1,80 @@
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  boolean,
+  timestamp,
+  pgEnum,
+  jsonb,
+  integer,
+} from "drizzle-orm/pg-core";
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+export const roleEnum = pgEnum("role", [
+  "client_admin",
+  "client_staff",
+  "operator",
+  "wibiz_admin",
+]);
+
+export const planTierEnum = pgEnum("plan_tier", ["lite", "standard", "pro"]);
+
+export const syncStatusEnum = pgEnum("sync_status", [
+  "pending",
+  "success",
+  "failed",
+]);
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+export const users = pgTable("users", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  email:        varchar("email", { length: 255 }).notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  role:         roleEnum("role").notNull().default("client_admin"),
+  // nullable — wibiz_admin users are seeded without a GHL contact ID
+  ghlContactId:  varchar("ghl_contact_id", { length: 255 }).unique(),
+  ghlLocationId: varchar("ghl_location_id", { length: 255 }),
+  firstName:     varchar("first_name", { length: 100 }),
+  lastName:      varchar("last_name", { length: 100 }),
+  planTier:      planTierEnum("plan_tier"),
+  vertical:      varchar("vertical", { length: 100 }),
+  hskdRequired:  boolean("hskd_required").default(false),
+  isActive:      boolean("is_active").default(true),
+  activatedAt:   timestamp("activated_at"),
+  lastLoginAt:   timestamp("last_login_at"),
+  createdAt:     timestamp("created_at").defaultNow(),
+  updatedAt:     timestamp("updated_at").defaultNow(),
+});
+
+// ─── Sync Events ──────────────────────────────────────────────────────────────
+export const syncEvents = pgTable("sync_events", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  entityType:    varchar("entity_type", { length: 50 }),
+  entityId:      uuid("entity_id"),
+  eventType:     varchar("event_type", { length: 100 }),
+  payloadJson:   jsonb("payload_json"),
+  status:        syncStatusEnum("status").default("pending"),
+  attemptCount:  integer("attempt_count").default(0),
+  lastAttemptAt: timestamp("last_attempt_at"),
+  errorMessage:  text("error_message"),
+  createdAt:     timestamp("created_at").defaultNow(),
+});
+
+// ─── Webhook Log ──────────────────────────────────────────────────────────────
+export const webhookLog = pgTable("webhook_log", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  source:     varchar("source", { length: 50 }),
+  rawPayload: jsonb("raw_payload"),
+  receivedAt: timestamp("received_at").defaultNow(),
+  processed:  boolean("processed").default(false),
+  error:      text("error"),
+});
+
+// ─── Inferred types ───────────────────────────────────────────────────────────
+export type User         = typeof users.$inferSelect;
+export type NewUser      = typeof users.$inferInsert;
+export type SyncEvent    = typeof syncEvents.$inferSelect;
+export type NewSyncEvent = typeof syncEvents.$inferInsert;
+export type WebhookLog    = typeof webhookLog.$inferSelect;
+export type NewWebhookLog = typeof webhookLog.$inferInsert;
