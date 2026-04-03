@@ -1,9 +1,9 @@
 // ─── Database client + all query functions (BC360 pattern: one file) ──────────
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool }    from "pg";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, asc } from "drizzle-orm";
 import * as schema from "../drizzle/schema";
-import type { NewUser, NewSyncEvent } from "../drizzle/schema";
+import type { NewUser, NewSyncEvent, NewModule } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 // ─── Connection ────────────────────────────────────────────────────────────────
@@ -76,6 +76,48 @@ export async function listUsers() {
     })
     .from(schema.users)
     .orderBy(desc(schema.users.createdAt));
+}
+
+// ─── Module queries ────────────────────────────────────────────────────────────
+export async function listModules(activeOnly = false) {
+  const query = db
+    .select()
+    .from(schema.modules)
+    .orderBy(asc(schema.modules.orderIndex), asc(schema.modules.createdAt));
+  if (activeOnly) {
+    return db
+      .select()
+      .from(schema.modules)
+      .where(eq(schema.modules.isActive, true))
+      .orderBy(asc(schema.modules.orderIndex), asc(schema.modules.createdAt));
+  }
+  return query;
+}
+
+export async function getModuleById(id: string) {
+  const [mod] = await db
+    .select()
+    .from(schema.modules)
+    .where(eq(schema.modules.id, id));
+  return mod ?? null;
+}
+
+export async function createModule(data: NewModule) {
+  const [mod] = await db.insert(schema.modules).values(data).returning();
+  return mod!;
+}
+
+export async function updateModule(id: string, data: Partial<NewModule>) {
+  const [mod] = await db
+    .update(schema.modules)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.modules.id, id))
+    .returning();
+  return mod ?? null;
+}
+
+export async function deleteModule(id: string) {
+  await db.delete(schema.modules).where(eq(schema.modules.id, id));
 }
 
 // ─── Webhook log ───────────────────────────────────────────────────────────────

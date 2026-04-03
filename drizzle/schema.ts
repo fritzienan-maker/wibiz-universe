@@ -71,6 +71,19 @@ export const webhookLog = pgTable("webhook_log", {
   error:      text("error"),
 });
 
+// ─── Modules ──────────────────────────────────────────────────────────────────
+export const modules = pgTable("modules", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  title:       varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  dayStart:    integer("day_start"),
+  dayEnd:      integer("day_end"),
+  orderIndex:  integer("order_index").notNull().default(0),
+  isActive:    boolean("is_active").notNull().default(true),
+  createdAt:   timestamp("created_at").defaultNow(),
+  updatedAt:   timestamp("updated_at").defaultNow(),
+});
+
 // ─── Inferred types ───────────────────────────────────────────────────────────
 export type User         = typeof users.$inferSelect;
 export type NewUser      = typeof users.$inferInsert;
@@ -78,3 +91,5 @@ export type SyncEvent    = typeof syncEvents.$inferSelect;
 export type NewSyncEvent = typeof syncEvents.$inferInsert;
 export type WebhookLog    = typeof webhookLog.$inferSelect;
 export type NewWebhookLog = typeof webhookLog.$inferInsert;
+export type Module        = typeof modules.$inferSelect;
+export type NewModule     = typeof modules.$inferInsert;

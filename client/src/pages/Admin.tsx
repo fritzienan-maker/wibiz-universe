@@ -34,21 +34,40 @@ interface WebhookLogRow {
   receivedAt: string | null;
 }
 
-type Tab = "users" | "sync" | "webhooks";
+interface ModuleRow {
+  id:          string;
+  title:       string;
+  description: string | null;
+  dayStart:    number | null;
+  dayEnd:      number | null;
+  orderIndex:  number;
+  isActive:    boolean;
+  createdAt:   string | null;
+  updatedAt:   string | null;
+}
+
+interface ModuleFormValues {
+  title:       string;
+  description: string;
+  dayStart:    string;
+  dayEnd:      string;
+  orderIndex:  string;
+  isActive:    boolean;
+}
+
+type Tab = "users" | "sync" | "webhooks" | "modules";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (d: string | null) =>
   d ? new Date(d).toLocaleString() : "—";
 
+const emptyForm = (): ModuleFormValues => ({
+  title: "", description: "", dayStart: "", dayEnd: "", orderIndex: "0", isActive: true,
+});
+
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
-    <span
-      className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-        ok
-          ? "bg-green-100 text-green-700"
-          : "bg-red-100 text-red-700"
-      }`}
-    >
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ok ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
       {label}
     </span>
   );
@@ -67,27 +86,183 @@ function SyncStatusBadge({ status }: { status: string | null }) {
   );
 }
 
+// ─── Module modal form ────────────────────────────────────────────────────────
+function ModuleModal({
+  initial,
+  onSave,
+  onClose,
+}: {
+  initial: ModuleFormValues;
+  onSave:  (values: ModuleFormValues) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [form,    setForm]    = useState<ModuleFormValues>(initial);
+  const [saving,  setSaving]  = useState(false);
+  const [formErr, setFormErr] = useState("");
+
+  const set = (k: keyof ModuleFormValues, v: string | boolean) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim()) { setFormErr("Title is required."); return; }
+    setSaving(true);
+    setFormErr("");
+    try {
+      await onSave(form);
+      onClose();
+    } catch (err) {
+      setFormErr(err instanceof ApiError ? err.message : "Save failed. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-lg mx-4">
+        <form onSubmit={submit}>
+          <div className="px-6 py-5 border-b border-border flex justify-between items-center">
+            <h2 className="font-semibold text-foreground text-base">
+              {initial.title ? "Edit Module" : "Create Module"}
+            </h2>
+            <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+          </div>
+
+          <div className="px-6 py-5 space-y-4">
+            {formErr && (
+              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{formErr}</p>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Title *</label>
+              <input
+                type="text"
+                value={form.title}
+                onChange={(e) => set("title", e.target.value)}
+                placeholder="e.g. Module 1 — Foundation & Setup"
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Description</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => set("description", e.target.value)}
+                rows={3}
+                placeholder="Short description shown to clients"
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Day Start</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.dayStart}
+                  onChange={(e) => set("dayStart", e.target.value)}
+                  placeholder="1"
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Day End</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.dayEnd}
+                  onChange={(e) => set("dayEnd", e.target.value)}
+                  placeholder="6"
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Order</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.orderIndex}
+                  onChange={(e) => set("orderIndex", e.target.value)}
+                  placeholder="0"
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={form.isActive}
+                onChange={(e) => set("isActive", e.target.checked)}
+                className="w-4 h-4 accent-primary"
+              />
+              <label htmlFor="isActive" className="text-sm text-foreground">
+                Active (visible to clients)
+              </label>
+            </div>
+          </div>
+
+          <div className="px-6 py-4 border-t border-border flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save Module"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [tab,         setTab]         = useState<Tab>("users");
   const [users,       setUsers]       = useState<UserRow[]>([]);
   const [syncEvents,  setSyncEvents]  = useState<SyncEventRow[]>([]);
   const [webhookLogs, setWebhookLogs] = useState<WebhookLogRow[]>([]);
+  const [modules,     setModules]     = useState<ModuleRow[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState("");
+
+  // Module modal state
+  const [modalOpen,   setModalOpen]   = useState(false);
+  const [editTarget,  setEditTarget]  = useState<ModuleRow | null>(null);
+  const [deleting,    setDeleting]    = useState<string | null>(null);
+
   const navigate = useNavigate();
+
+  const loadAll = async () => {
+    const [u, s, w, m] = await Promise.all([
+      apiFetch<{ users: UserRow[] }>("/admin/users"),
+      apiFetch<{ events: SyncEventRow[] }>("/admin/sync-events"),
+      apiFetch<{ logs: WebhookLogRow[] }>("/admin/webhook-log"),
+      apiFetch<{ modules: ModuleRow[] }>("/admin/modules"),
+    ]);
+    setUsers(u.users);
+    setSyncEvents(s.events);
+    setWebhookLogs(w.logs);
+    setModules(m.modules);
+  };
 
   useEffect(() => {
     (async () => {
       try {
-        const [u, s, w] = await Promise.all([
-          apiFetch<{ users: UserRow[] }>("/admin/users"),
-          apiFetch<{ events: SyncEventRow[] }>("/admin/sync-events"),
-          apiFetch<{ logs: WebhookLogRow[] }>("/admin/webhook-log"),
-        ]);
-        setUsers(u.users);
-        setSyncEvents(s.events);
-        setWebhookLogs(w.logs);
+        await loadAll();
       } catch (err) {
         if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
           navigate("/dashboard", { replace: true });
@@ -105,6 +280,39 @@ export default function AdminPage() {
     navigate("/login", { replace: true });
   };
 
+  const openCreate = () => { setEditTarget(null); setModalOpen(true); };
+  const openEdit   = (m: ModuleRow) => { setEditTarget(m); setModalOpen(true); };
+  const closeModal = () => { setModalOpen(false); setEditTarget(null); };
+
+  const saveModule = async (values: ModuleFormValues) => {
+    const body = {
+      title:       values.title.trim(),
+      description: values.description.trim() || null,
+      dayStart:    values.dayStart ? parseInt(values.dayStart) : null,
+      dayEnd:      values.dayEnd   ? parseInt(values.dayEnd)   : null,
+      orderIndex:  parseInt(values.orderIndex) || 0,
+      isActive:    values.isActive,
+    };
+    if (editTarget) {
+      await apiFetch(`/admin/modules/${editTarget.id}`, { method: "PUT", body: JSON.stringify(body) });
+    } else {
+      await apiFetch("/admin/modules", { method: "POST", body: JSON.stringify(body) });
+    }
+    const m = await apiFetch<{ modules: ModuleRow[] }>("/admin/modules");
+    setModules(m.modules);
+  };
+
+  const deleteModuleById = async (id: string) => {
+    if (!confirm("Delete this module? This cannot be undone.")) return;
+    setDeleting(id);
+    try {
+      await apiFetch(`/admin/modules/${id}`, { method: "DELETE" });
+      setModules((prev) => prev.filter((m) => m.id !== id));
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">
@@ -120,10 +328,31 @@ export default function AdminPage() {
     users:    `Users (${users.length})`,
     sync:     "Sync Events",
     webhooks: "Webhook Log",
+    modules:  `Modules (${modules.length})`,
   };
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Module modal */}
+      {modalOpen && (
+        <ModuleModal
+          initial={
+            editTarget
+              ? {
+                  title:       editTarget.title,
+                  description: editTarget.description ?? "",
+                  dayStart:    editTarget.dayStart?.toString() ?? "",
+                  dayEnd:      editTarget.dayEnd?.toString() ?? "",
+                  orderIndex:  editTarget.orderIndex.toString(),
+                  isActive:    editTarget.isActive,
+                }
+              : emptyForm()
+          }
+          onSave={saveModule}
+          onClose={closeModal}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-card border-b border-border px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-2 text-sm">
@@ -144,7 +373,7 @@ export default function AdminPage() {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Tabs */}
         <div className="flex gap-1 border-b border-border">
-          {(["users", "sync", "webhooks"] as Tab[]).map((t) => (
+          {(["users", "modules", "sync", "webhooks"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -167,9 +396,7 @@ export default function AdminPage() {
                 <tr className="text-left text-muted-foreground border-b border-border">
                   {["Email", "Name", "Role", "Plan", "Vertical", "Active", "GHL ID", "Provisioned"].map(
                     (h) => (
-                      <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">
-                        {h}
-                      </th>
+                      <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">{h}</th>
                     )
                   )}
                 </tr>
@@ -182,13 +409,7 @@ export default function AdminPage() {
                       {[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}
                     </td>
                     <td className="py-2 pr-4">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          u.role === "wibiz_admin"
-                            ? "bg-primary/10 text-primary"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.role === "wibiz_admin" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
                         {u.role}
                       </span>
                     </td>
@@ -217,6 +438,79 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ── Modules ── */}
+        {tab === "modules" && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-muted-foreground">
+                Manage the 30-day programme modules. Changes reflect immediately on the client dashboard.
+              </p>
+              <button
+                onClick={openCreate}
+                className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+              >
+                + Create Module
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-muted-foreground border-b border-border">
+                    {["Order", "Title", "Days", "Description", "Status", "Actions"].map((h) => (
+                      <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {modules.map((m) => (
+                    <tr key={m.id} className="border-b border-border/40 hover:bg-muted/20">
+                      <td className="py-3 pr-4 text-muted-foreground font-mono text-xs">{m.orderIndex}</td>
+                      <td className="py-3 pr-4 font-medium text-foreground max-w-xs">
+                        {m.title}
+                      </td>
+                      <td className="py-3 pr-4 text-xs text-muted-foreground whitespace-nowrap">
+                        {m.dayStart && m.dayEnd ? `Day ${m.dayStart}–${m.dayEnd}` : "—"}
+                      </td>
+                      <td className="py-3 pr-4 text-xs text-muted-foreground max-w-xs truncate">
+                        {m.description ?? "—"}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <StatusBadge ok={m.isActive} label={m.isActive ? "Active" : "Hidden"} />
+                      </td>
+                      <td className="py-3 flex gap-2">
+                        <button
+                          onClick={() => openEdit(m)}
+                          className="text-xs px-3 py-1 border border-border rounded-lg text-foreground hover:bg-muted/40"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteModuleById(m.id)}
+                          disabled={deleting === m.id}
+                          className="text-xs px-3 py-1 border border-destructive/40 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                        >
+                          {deleting === m.id ? "…" : "Delete"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {modules.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                        No modules yet.{" "}
+                        <button onClick={openCreate} className="text-primary underline">
+                          Create the first one.
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* ── Sync Events ── */}
         {tab === "sync" && (
           <div className="overflow-x-auto">
@@ -224,9 +518,7 @@ export default function AdminPage() {
               <thead>
                 <tr className="text-left text-muted-foreground border-b border-border">
                   {["Event Type", "Entity", "Status", "Error", "Time"].map((h) => (
-                    <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">
-                      {h}
-                    </th>
+                    <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -235,23 +527,13 @@ export default function AdminPage() {
                   <tr key={e.id} className="border-b border-border/40 hover:bg-muted/20">
                     <td className="py-2 pr-4 font-mono text-xs">{e.eventType ?? "—"}</td>
                     <td className="py-2 pr-4 text-xs text-muted-foreground">{e.entityType ?? "—"}</td>
-                    <td className="py-2 pr-4">
-                      <SyncStatusBadge status={e.status} />
-                    </td>
-                    <td className="py-2 pr-4 text-xs text-destructive max-w-xs truncate">
-                      {e.errorMessage ?? "—"}
-                    </td>
-                    <td className="py-2 text-xs text-muted-foreground whitespace-nowrap">
-                      {fmt(e.createdAt)}
-                    </td>
+                    <td className="py-2 pr-4"><SyncStatusBadge status={e.status} /></td>
+                    <td className="py-2 pr-4 text-xs text-destructive max-w-xs truncate">{e.errorMessage ?? "—"}</td>
+                    <td className="py-2 text-xs text-muted-foreground whitespace-nowrap">{fmt(e.createdAt)}</td>
                   </tr>
                 ))}
                 {syncEvents.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-10 text-center text-muted-foreground">
-                      No sync events yet
-                    </td>
-                  </tr>
+                  <tr><td colSpan={5} className="py-10 text-center text-muted-foreground">No sync events yet</td></tr>
                 )}
               </tbody>
             </table>
@@ -265,9 +547,7 @@ export default function AdminPage() {
               <thead>
                 <tr className="text-left text-muted-foreground border-b border-border">
                   {["Source", "Processed", "Error", "Received"].map((h) => (
-                    <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">
-                      {h}
-                    </th>
+                    <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -278,20 +558,12 @@ export default function AdminPage() {
                     <td className="py-2 pr-4">
                       <StatusBadge ok={Boolean(w.processed)} label={w.processed ? "Yes" : "No"} />
                     </td>
-                    <td className="py-2 pr-4 text-xs text-destructive max-w-sm truncate">
-                      {w.error ?? "—"}
-                    </td>
-                    <td className="py-2 text-xs text-muted-foreground whitespace-nowrap">
-                      {fmt(w.receivedAt)}
-                    </td>
+                    <td className="py-2 pr-4 text-xs text-destructive max-w-sm truncate">{w.error ?? "—"}</td>
+                    <td className="py-2 text-xs text-muted-foreground whitespace-nowrap">{fmt(w.receivedAt)}</td>
                   </tr>
                 ))}
                 {webhookLogs.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-10 text-center text-muted-foreground">
-                      No webhook events yet
-                    </td>
-                  </tr>
+                  <tr><td colSpan={4} className="py-10 text-center text-muted-foreground">No webhook events yet</td></tr>
                 )}
               </tbody>
             </table>

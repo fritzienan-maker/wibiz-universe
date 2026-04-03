@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { apiFetch, ApiError } from "../lib/api";
 
+interface Module {
+  id:          string;
+  title:       string;
+  description: string | null;
+  dayStart:    number | null;
+  dayEnd:      number | null;
+  orderIndex:  number;
+  status:      "available" | "locked";
+}
+
 interface DashboardData {
   user: {
     id:           string;
@@ -13,7 +23,7 @@ interface DashboardData {
     vertical:     string | null;
     hskdRequired: boolean | null;
   };
-  modules: { id: number; title: string; status: string; description: string }[];
+  modules: Module[];
 }
 
 export default function DashboardPage() {
@@ -38,9 +48,7 @@ export default function DashboardPage() {
     navigate("/login", { replace: true });
   };
 
-  if (error) {
-    return <div className="p-8 text-destructive">{error}</div>;
-  }
+  if (error) return <div className="p-8 text-destructive">{error}</div>;
   if (!data) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">
@@ -60,10 +68,7 @@ export default function DashboardPage() {
         <span className="text-lg font-bold text-foreground">WiBiz Academy</span>
         <div className="flex items-center gap-4">
           {user.role === "wibiz_admin" && (
-            <Link
-              to="/admin"
-              className="text-sm text-primary hover:text-primary/80 font-medium"
-            >
+            <Link to="/admin" className="text-sm text-primary hover:text-primary/80 font-medium">
               Admin
             </Link>
           )}
@@ -79,62 +84,68 @@ export default function DashboardPage() {
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-6">
         {/* Welcome */}
         <div className="bg-card rounded-2xl border border-border p-6">
-          <h2 className="text-xl font-semibold text-foreground">
-            Welcome, {displayName}
-          </h2>
+          <h2 className="text-xl font-semibold text-foreground">Welcome, {displayName}</h2>
           <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-            <span>
-              Plan:{" "}
-              <strong className="text-foreground capitalize">
-                {user.planTier ?? "—"}
-              </strong>
-            </span>
-            <span>
-              Vertical:{" "}
-              <strong className="text-foreground capitalize">
-                {user.vertical ?? "—"}
-              </strong>
-            </span>
-            <span>
-              Role:{" "}
-              <strong className="text-foreground capitalize">
-                {user.role.replace(/_/g, " ")}
-              </strong>
-            </span>
+            {user.planTier && (
+              <span>
+                Plan: <strong className="text-foreground capitalize">{user.planTier}</strong>
+              </span>
+            )}
+            {user.vertical && (
+              <span>
+                Vertical: <strong className="text-foreground capitalize">{user.vertical}</strong>
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Modules */}
+        {/* Programme */}
         <div>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-            Your Programme
+            Your 30-Day Programme
           </h3>
-          <div className="grid gap-3">
-            {modules.map((m) => (
-              <div
-                key={m.id}
-                className="bg-card rounded-xl border border-border p-4 flex justify-between items-center opacity-60"
-              >
-                <div>
-                  <p className="font-medium text-foreground">{m.title}</p>
-                  <p className="text-sm text-muted-foreground">{m.description}</p>
-                </div>
-                <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full">
-                  Locked
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
 
-        {/* Change password note */}
-        <p className="text-xs text-muted-foreground text-center">
-          To change your password, ask your administrator or use the{" "}
-          <code className="font-mono bg-muted px-1 rounded">
-            POST /api/auth/change-password
-          </code>{" "}
-          endpoint. {/* Phase 2: add /settings page */}
-        </p>
+          {modules.length === 0 ? (
+            <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground text-sm">
+              Your programme modules are being set up. Check back soon.
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {modules.map((m) => {
+                const available = m.status === "available";
+                return (
+                  <div
+                    key={m.id}
+                    className={`bg-card rounded-xl border p-4 flex justify-between items-center transition-opacity ${
+                      available ? "border-primary/30" : "border-border opacity-60"
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <p className="font-medium text-foreground">{m.title}</p>
+                      {m.description && (
+                        <p className="text-sm text-muted-foreground">{m.description}</p>
+                      )}
+                      {m.dayStart && m.dayEnd && (
+                        <p className="text-xs text-muted-foreground">
+                          Day {m.dayStart}–{m.dayEnd}
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      className={`text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ml-4 ${
+                        available
+                          ? "bg-primary/10 text-primary"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {available ? "Available" : "Locked"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

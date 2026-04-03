@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../_core/auth";
-import { getUserById }  from "../db";
+import { getUserById, listModules } from "../db";
 
 export const dashboardRouter = Router();
 
@@ -12,14 +12,19 @@ dashboardRouter.get(
     const user = await getUserById(req.user!.userId);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
-    // Phase 1: placeholder modules — real content + progress in Phase 2
-    const placeholderModules = [
-      { id: 1, title: "WiBiz Foundations",    status: "locked", description: "Coming soon" },
-      { id: 2, title: "Systems & Tools Setup", status: "locked", description: "Coming soon" },
-      { id: 3, title: "Client Acquisition",   status: "locked", description: "Coming soon" },
-      { id: 4, title: "Certification Prep",   status: "locked", description: "Coming soon" },
-      { id: 5, title: "HSKD Compliance",      status: "locked", description: "Coming soon" },
-    ];
+    const allModules = await listModules(true); // active only
+
+    // Module 1 (lowest orderIndex) is available; all others are locked until
+    // JotForm progress gates are built in Phase 2.
+    const modules = allModules.map((m, i) => ({
+      id:          m.id,
+      title:       m.title,
+      description: m.description,
+      dayStart:    m.dayStart,
+      dayEnd:      m.dayEnd,
+      orderIndex:  m.orderIndex,
+      status:      i === 0 ? "available" : "locked",
+    }));
 
     res.json({
       user: {
@@ -32,7 +37,7 @@ dashboardRouter.get(
         vertical:     user.vertical,
         hskdRequired: user.hskdRequired,
       },
-      modules: placeholderModules,
+      modules,
     });
   }
 );

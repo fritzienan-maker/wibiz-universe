@@ -8,6 +8,13 @@
       "when": 1775212573463,
       "tag": "0000_high_kid_colt",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1775218805327,
+      "tag": "0001_foamy_magneto",
+      "breakpoints": true
     }
   ]
 }
