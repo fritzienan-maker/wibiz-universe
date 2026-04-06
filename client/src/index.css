@@ -52,7 +52,7 @@
   --r-bg:#200f0f;--r-t:#f07070;--r-b:#3d1515;
 }
 
-*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,*::before,*::after { box-sizing: border-box;  }
 html { font-size: 16px; }
 body {
   font-family: 'DM Sans', sans-serif;
