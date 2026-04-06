@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { apiFetch, ApiError } from "../lib/api";
 
@@ -89,7 +89,7 @@ const emptyForm = (): ModuleFormValues => ({
 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ok ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ok ? "bg-green-900/40 text-green-400 border border-green-800/50" : "bg-red-900/40 text-red-400 border border-red-800/50"}`}>
       {label}
     </span>
   );
@@ -97,9 +97,9 @@ function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
 
 function SyncStatusBadge({ status }: { status: string | null }) {
   const cfg = {
-    success: "bg-green-100 text-green-700",
-    failed:  "bg-red-100 text-red-700",
-    pending: "bg-yellow-100 text-yellow-700",
+    success: "bg-green-900/40 text-green-400",
+    failed:  "bg-red-900/40 text-red-400",
+    pending: "bg-yellow-900/40 text-yellow-400",
   }[status ?? "pending"] ?? "bg-muted text-muted-foreground";
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg}`}>
@@ -645,8 +645,8 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {modules.map((m) => (
-                    <>
-                    <tr key={m.id} className="border-b border-border/40 hover:bg-muted/20">
+                    <Fragment key={m.id}>
+                    <tr className="border-b border-border/40 hover:bg-muted/20">
                       <td className="py-3 pr-4 text-muted-foreground font-mono text-xs">{m.orderIndex}</td>
                       <td className="py-3 pr-4 font-medium text-foreground max-w-xs">
                         {m.title}
@@ -683,13 +683,13 @@ export default function AdminPage() {
                       </td>
                     </tr>
                     {expandedModule === m.id && (
-                      <tr key={`${m.id}-ex`} className="bg-muted/10">
+                      <tr className="bg-muted/10">
                         <td colSpan={6} className="pb-4 pt-1 px-2">
                           <ExercisePanel moduleId={m.id} onClose={() => setExpandedModule(null)} />
                         </td>
                       </tr>
                     )}
-                    </>
+                    </Fragment>
                   ))}
                   {modules.length === 0 && (
                     <tr>

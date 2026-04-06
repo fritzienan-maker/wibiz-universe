@@ -18,6 +18,7 @@
   --color-destructive:        var(--destructive);
   --color-accent:             var(--accent);
   --color-accent-foreground:  var(--accent-foreground);
+  --color-ring:               var(--primary);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -200,6 +201,13 @@ body {
 .p-prog-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--ts);margin-bottom:4px}
 .p-prog-bar{height:6px;background:var(--s4);border-radius:2px;overflow:hidden}
 .p-prog-fill{height:100%;border-radius:2px}
+
+/* ── MODULE HEADER ── */
+.p-mod-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--bdr)}
+.p-mod-hdr-title{font-size:14px;font-weight:500}
+
+/* ── EMPTY STATE ── */
+.p-empty{padding:40px 0;text-align:center;color:var(--ts);font-size:13px}
 
 /* ── TEAM TABLE ── */
 .p-tt{width:100%;font-size:12px;border-collapse:collapse}
