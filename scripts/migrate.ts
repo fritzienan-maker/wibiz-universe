@@ -28,8 +28,41 @@ if (!DB_URL) {
 // Format: { name: "unique-name", sql: "ALTER TABLE ..." }
 // Each migration runs once and is tracked in _custom_migrations table.
 const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
-  // Example:
-  // { name: "0001_add_notes_column", sql: "ALTER TABLE users ADD COLUMN notes TEXT" },
+  {
+    name: "0001_exercises_proof_prompt",
+    sql:  "ALTER TABLE exercises ADD COLUMN IF NOT EXISTS proof_prompt TEXT",
+  },
+  {
+    name: "0002_user_progress_proof_text",
+    sql:  "ALTER TABLE user_progress ADD COLUMN IF NOT EXISTS proof_text TEXT",
+  },
+  {
+    name: "0003_create_quiz_questions",
+    sql: `CREATE TABLE IF NOT EXISTS quiz_questions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      module_id UUID NOT NULL,
+      question TEXT NOT NULL,
+      options JSONB NOT NULL,
+      correct_answer_index INTEGER NOT NULL,
+      order_index INTEGER NOT NULL DEFAULT 0,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+  },
+  {
+    name: "0004_create_quiz_responses",
+    sql: `CREATE TABLE IF NOT EXISTS quiz_responses (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL,
+      module_id UUID NOT NULL,
+      answers JSONB NOT NULL,
+      score INTEGER NOT NULL,
+      total_questions INTEGER NOT NULL,
+      passed BOOLEAN NOT NULL DEFAULT FALSE,
+      passed_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+  },
 ];
 
 async function run(): Promise<void> {

@@ -9,6 +9,7 @@ import { webhookRouter }   from "../routes/webhooks";
 import { dashboardRouter } from "../routes/dashboard";
 import { adminRouter }     from "../routes/admin";
 import { progressRouter }  from "../routes/progress";
+import { quizRouter }      from "../routes/quiz";
 import { setupVite, serveStatic } from "./vite";
 
 validateEnv();
@@ -42,6 +43,7 @@ app.use("/api/webhooks",  webhookRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/admin",     adminRouter);
 app.use("/api/progress",  progressRouter);
+app.use("/api/quiz",      quizRouter);
 
 // ─── Frontend (Vite dev middleware or static build) ───────────────────────────
 async function startServer(): Promise<void> {

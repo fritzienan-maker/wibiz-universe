@@ -6,6 +6,7 @@ import {
   listExercisesByModule,
   getCompletedExerciseIds,
   getCompletedModuleIds,
+  hasPassedQuiz,
 } from "../db";
 
 export const dashboardRouter = Router();
@@ -24,17 +25,19 @@ dashboardRouter.get(
       getCompletedModuleIds(req.user!.userId),
     ]);
 
-    // Fetch exercises for all modules in parallel
-    const exerciseLists = await Promise.all(
-      allModules.map((m) => listExercisesByModule(m.id, true))
-    );
+    // Fetch exercises and quiz pass status for all modules in parallel
+    const [exerciseLists, quizPassedFlags] = await Promise.all([
+      Promise.all(allModules.map((m) => listExercisesByModule(m.id, true))),
+      Promise.all(allModules.map((m) => hasPassedQuiz(req.user!.userId, m.id))),
+    ]);
 
     // Build enriched module list with status and exercise unlock logic
     let prevGateSubmitted = true; // first module is always available
 
     const modules = allModules.map((m, i) => {
-      const exs = exerciseLists[i]!;
+      const exs          = exerciseLists[i]!;
       const gateSubmitted = completedModuleIds.has(m.id);
+      const quizPassed    = quizPassedFlags[i]!;
 
       // Determine module status
       let status: "available" | "locked" | "complete";
@@ -54,7 +57,6 @@ dashboardRouter.get(
           if (j === 0) {
             isUnlocked = true;
           } else {
-            // unlock if the previous exercise is complete
             isUnlocked = completedExerciseIds.has(exs[j - 1]!.id);
           }
         }
@@ -62,6 +64,7 @@ dashboardRouter.get(
           id:          ex.id,
           title:       ex.title,
           description: ex.description,
+          proofPrompt: ex.proofPrompt,
           dayNumber:   ex.dayNumber,
           orderIndex:  ex.orderIndex,
           isComplete,
@@ -69,10 +72,9 @@ dashboardRouter.get(
         };
       });
 
-      const completedCount = exercises.filter((e) => e.isComplete).length;
+      const completedCount  = exercises.filter((e) => e.isComplete).length;
       const allExercisesDone = exs.length > 0 && completedCount === exs.length;
 
-      // next module gets prevGateSubmitted based on this module's gate
       prevGateSubmitted = gateSubmitted;
 
       return {
@@ -85,15 +87,16 @@ dashboardRouter.get(
         status,
         gateSubmitted,
         allExercisesDone,
+        quizPassed,
         exercises,
         completedExercises:  completedCount,
         totalExercises:      exs.length,
       };
     });
 
-    const totalExercises    = modules.reduce((s, m) => s + m.totalExercises, 0);
-    const completedExs      = modules.reduce((s, m) => s + m.completedExercises, 0);
-    const completedMods     = modules.filter((m) => m.gateSubmitted).length;
+    const totalExercises = modules.reduce((s, m) => s + m.totalExercises, 0);
+    const completedExs   = modules.reduce((s, m) => s + m.completedExercises, 0);
+    const completedMods  = modules.filter((m) => m.gateSubmitted).length;
 
     res.json({
       user: {

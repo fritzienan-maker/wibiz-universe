@@ -90,6 +90,7 @@ export const exercises = pgTable("exercises", {
   moduleId:    uuid("module_id").notNull(),
   title:       varchar("title", { length: 255 }).notNull(),
   description: text("description"),
+  proofPrompt: text("proof_prompt"), // what the client must submit as proof before marking complete
   dayNumber:   integer("day_number"),
   orderIndex:  integer("order_index").notNull().default(0),
   isActive:    boolean("is_active").notNull().default(true),
@@ -98,11 +99,12 @@ export const exercises = pgTable("exercises", {
 });
 
 // ─── User Progress ────────────────────────────────────────────────────────────
-// One row per (user, exercise) pair — created when client confirms completion
+// One row per (user, exercise) pair — created when client submits proof + confirms completion
 export const userProgress = pgTable("user_progress", {
   id:          uuid("id").primaryKey().defaultRandom(),
   userId:      uuid("user_id").notNull(),
   exerciseId:  uuid("exercise_id").notNull(),
+  proofText:   text("proof_text"),   // client's proof submission
   completedAt: timestamp("completed_at").defaultNow(),
 });
 
@@ -112,6 +114,33 @@ export const userModuleCompletions = pgTable("user_module_completions", {
   userId:      uuid("user_id").notNull(),
   moduleId:    uuid("module_id").notNull(),
   confirmedAt: timestamp("confirmed_at").defaultNow(),
+});
+
+// ─── Quiz Questions ───────────────────────────────────────────────────────────
+// 3-5 questions per module; correct answer is server-side only (never sent to client)
+export const quizQuestions = pgTable("quiz_questions", {
+  id:                 uuid("id").primaryKey().defaultRandom(),
+  moduleId:           uuid("module_id").notNull(),
+  question:           text("question").notNull(),
+  options:            jsonb("options").$type<string[]>().notNull(),
+  correctAnswerIndex: integer("correct_answer_index").notNull(),
+  orderIndex:         integer("order_index").notNull().default(0),
+  isActive:           boolean("is_active").notNull().default(true),
+  createdAt:          timestamp("created_at").defaultNow(),
+});
+
+// ─── Quiz Responses ───────────────────────────────────────────────────────────
+// One row per (user, module) attempt — most recent attempt is authoritative
+export const quizResponses = pgTable("quiz_responses", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  userId:         uuid("user_id").notNull(),
+  moduleId:       uuid("module_id").notNull(),
+  answers:        jsonb("answers").$type<number[]>().notNull(),
+  score:          integer("score").notNull(),
+  totalQuestions: integer("total_questions").notNull(),
+  passed:         boolean("passed").notNull().default(false),
+  passedAt:       timestamp("passed_at"),
+  createdAt:      timestamp("created_at").defaultNow(),
 });
 
 // ─── Inferred types ───────────────────────────────────────────────────────────

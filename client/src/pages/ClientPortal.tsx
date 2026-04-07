@@ -7,6 +7,7 @@ interface Exercise {
   id:          string;
   title:       string;
   description: string | null;
+  proofPrompt: string | null;
   dayNumber:   number | null;
   orderIndex:  number;
   isComplete:  boolean;
@@ -23,6 +24,7 @@ interface Module {
   status:             "available" | "locked" | "complete";
   gateSubmitted:      boolean;
   allExercisesDone:   boolean;
+  quizPassed:         boolean;
   exercises:          Exercise[];
   completedExercises: number;
   totalExercises:     number;
@@ -49,6 +51,19 @@ interface DashboardData {
   };
 }
 
+interface QuizQuestion {
+  id:         string;
+  question:   string;
+  options:    string[];
+  orderIndex: number;
+}
+
+interface QuizState {
+  moduleId:    string;
+  questions:   QuizQuestion[];
+  lastAttempt: { score: number; totalQuestions: number; passed: boolean; passedAt: string | null } | null;
+}
+
 type Tab = "dashboard" | "programme" | "team" | "resources";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -63,12 +78,247 @@ function capitalize(s: string | null) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// ─── Exercise proof form ──────────────────────────────────────────────────────
+function ExerciseProofForm({
+  exercise,
+  onSubmit,
+  submitting,
+}: {
+  exercise:   Exercise;
+  onSubmit:   (exerciseId: string, proofText: string) => Promise<void>;
+  submitting: string | null;
+}) {
+  const [open,      setOpen]      = useState(false);
+  const [proofText, setProofText] = useState("");
+  const [error,     setError]     = useState("");
+
+  if (exercise.isComplete) {
+    return (
+      <div className="p-ex-row">
+        <div className="p-ex-check ec-done">✓</div>
+        <div className="p-ex-label">
+          {exercise.dayNumber ? `Day ${exercise.dayNumber} — ` : ""}
+          {exercise.title.replace(/^Day \d+ — /, "")}
+        </div>
+        <div className="p-ex-day" style={{ color: "var(--g-t)" }}>Done</div>
+      </div>
+    );
+  }
+
+  if (!exercise.isUnlocked) {
+    return (
+      <div className="p-ex-row" style={{ opacity: 0.45 }}>
+        <div className="p-ex-check ec-lock" />
+        <div className="p-ex-label locked">
+          {exercise.dayNumber ? `Day ${exercise.dayNumber} — ` : ""}
+          {exercise.title.replace(/^Day \d+ — /, "")}
+        </div>
+        <div className="p-ex-day">Locked</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-proof-wrap">
+      <div
+        className="p-ex-row"
+        style={{ cursor: "pointer" }}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <div className="p-ex-check ec-active">{open ? "▾" : "○"}</div>
+        <div className="p-ex-label">
+          {exercise.dayNumber ? `Day ${exercise.dayNumber} — ` : ""}
+          {exercise.title.replace(/^Day \d+ — /, "")}
+        </div>
+        <div className="p-ex-day" style={{ color: "var(--b400)" }}>
+          {open ? "Collapse" : "Submit proof →"}
+        </div>
+      </div>
+
+      {open && (
+        <div className="p-proof-form">
+          {exercise.description && (
+            <div className="p-proof-desc">{exercise.description}</div>
+          )}
+          {exercise.proofPrompt && (
+            <label className="p-proof-label">{exercise.proofPrompt}</label>
+          )}
+          <textarea
+            className="p-proof-ta"
+            rows={4}
+            placeholder="Type your response here…"
+            value={proofText}
+            onChange={(e) => { setProofText(e.target.value); setError(""); }}
+          />
+          {error && <div className="p-proof-err">{error}</div>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <button
+              className="p-btn-ghost"
+              onClick={() => { setOpen(false); setError(""); setProofText(""); }}
+            >
+              Cancel
+            </button>
+            <button
+              className="p-btn p-btn-blue"
+              disabled={submitting === exercise.id}
+              onClick={async () => {
+                if (!proofText.trim()) {
+                  setError("Your proof response is required before marking this exercise complete.");
+                  return;
+                }
+                await onSubmit(exercise.id, proofText.trim());
+              }}
+            >
+              {submitting === exercise.id ? "Saving…" : "Submit + Mark Complete →"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Quiz panel ───────────────────────────────────────────────────────────────
+function QuizPanel({
+  moduleId,
+  onQuizPassed,
+}: {
+  moduleId:     string;
+  onQuizPassed: () => void;
+}) {
+  const [quiz,      setQuiz]      = useState<QuizState | null>(null);
+  const [loading,   setLoading]   = useState(false);
+  const [selected,  setSelected]  = useState<Record<string, number>>({});
+  const [result,    setResult]    = useState<{ score: number; total: number; passed: boolean; message: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error,     setError]     = useState("");
+
+  const loadQuiz = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiFetch<QuizState>(`/quiz/module/${moduleId}`);
+      setQuiz(data);
+      if (data.lastAttempt?.passed) {
+        setResult({
+          score:   data.lastAttempt.score,
+          total:   data.lastAttempt.totalQuestions,
+          passed:  true,
+          message: "Quiz already passed.",
+        });
+      }
+    } catch (err) {
+      if (err instanceof ApiError) setError(err.message ?? "Failed to load quiz.");
+    } finally {
+      setLoading(false);
+    }
+  }, [moduleId]);
+
+  const submitQuiz = async () => {
+    if (!quiz) return;
+    const answers = quiz.questions.map((q) => selected[q.id] ?? -1);
+    if (answers.some((a) => a === -1)) {
+      setError("Answer all questions before submitting.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await apiFetch<{ score: number; totalQuestions: number; passed: boolean; message: string }>(
+        `/quiz/module/${moduleId}`,
+        { method: "POST", body: JSON.stringify({ answers }) }
+      );
+      setResult({ score: res.score, total: res.totalQuestions, passed: res.passed, message: res.message });
+      if (res.passed) onQuizPassed();
+    } catch (err) {
+      if (err instanceof ApiError) setError(err.message ?? "Failed to submit quiz.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="p-quiz-box"><div style={{ color: "var(--ts)", fontSize: 13 }}>Loading quiz…</div></div>;
+
+  if (!quiz) {
+    return (
+      <div className="p-quiz-box">
+        <div className="p-quiz-hdr">
+          <span className="p-quiz-icon">?</span>
+          <div>
+            <div className="p-quiz-title">Module Quiz</div>
+            <div className="p-quiz-sub">Unlock after completing all exercises</div>
+          </div>
+          <button className="p-btn p-btn-blue" onClick={loadQuiz}>Load Quiz →</button>
+        </div>
+        {error && <div className="p-proof-err" style={{ marginTop: 8 }}>{error}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-quiz-box">
+      <div className="p-quiz-hdr">
+        <span className="p-quiz-icon">?</span>
+        <div>
+          <div className="p-quiz-title">Module Quiz — {quiz.questions.length} questions</div>
+          <div className="p-quiz-sub">Pass with 60%+ to unlock the module sign-off</div>
+        </div>
+        {result?.passed && <span className="p-badge b-done">Passed</span>}
+        {result && !result.passed && <span className="p-badge b-warn">{result.score}/{result.total} — retry</span>}
+      </div>
+
+      {result && (
+        <div className={`p-quiz-result ${result.passed ? "qr-pass" : "qr-fail"}`}>
+          {result.message}
+        </div>
+      )}
+
+      {(!result || !result.passed) && (
+        <>
+          {quiz.questions.map((q, qi) => (
+            <div key={q.id} className="p-quiz-q">
+              <div className="p-quiz-qtext">
+                <span className="p-quiz-qnum">{qi + 1}.</span> {q.question}
+              </div>
+              <div className="p-quiz-opts">
+                {q.options.map((opt, oi) => (
+                  <label key={oi} className={`p-quiz-opt ${selected[q.id] === oi ? "selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name={`q-${q.id}`}
+                      value={oi}
+                      checked={selected[q.id] === oi}
+                      onChange={() => setSelected((s) => ({ ...s, [q.id]: oi }))}
+                    />
+                    {opt}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {error && <div className="p-proof-err">{error}</div>}
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+            <button
+              className="p-btn p-btn-amber"
+              disabled={submitting}
+              onClick={submitQuiz}
+            >
+              {submitting ? "Checking…" : "Submit Quiz →"}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Dashboard tab ────────────────────────────────────────────────────────────
 function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange: (t: Tab) => void }) {
   const { user, modules, stats } = data;
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
 
-  // Find the current active module and next exercise
   const activeModule = modules.find((m) => m.status === "available");
   const nextExercise = activeModule?.exercises.find((e) => e.isUnlocked && !e.isComplete) ?? null;
 
@@ -127,8 +377,7 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
           <div className="p-card">
             <div className="p-card-title">Your Learning Path</div>
 
-            {/* 30-day programme */}
-            <div className="p-ci" onClick={() => onTabChange("programme")} style={{cursor:"pointer"}}>
+            <div className="p-ci" onClick={() => onTabChange("programme")} style={{ cursor: "pointer" }}>
               <div className="p-ci-icon ic-30">30</div>
               <div className="p-ci-info">
                 <div className="p-ci-name">30-Day Programme</div>
@@ -147,7 +396,6 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
               </span>
             </div>
 
-            {/* Loom handover video */}
             <div className="p-ci">
               <div className="p-ci-icon ic-loom">▶</div>
               <div className="p-ci-info">
@@ -157,7 +405,6 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
               <span className="p-badge b-prog">Watch</span>
             </div>
 
-            {/* System test */}
             <div className="p-ci">
               <div className="p-ci-icon ic-test">✓</div>
               <div className="p-ci-info">
@@ -169,7 +416,6 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
               <span className="p-badge b-lock">Locked</span>
             </div>
 
-            {/* HSKD — conditional */}
             {user.hskdRequired && (
               <div className="p-ci">
                 <div className="p-ci-icon ic-hskd">H</div>
@@ -183,8 +429,7 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
               </div>
             )}
 
-            {/* Resources */}
-            <div className="p-ci" onClick={() => onTabChange("resources")} style={{cursor:"pointer"}}>
+            <div className="p-ci" onClick={() => onTabChange("resources")} style={{ cursor: "pointer" }}>
               <div className="p-ci-icon ic-res">R</div>
               <div className="p-ci-info">
                 <div className="p-ci-name">Resource Library</div>
@@ -194,7 +439,6 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
             </div>
           </div>
 
-          {/* Resume box */}
           {nextExercise && (
             <div className="p-card">
               <div className="p-card-title">Continue Where You Left Off</div>
@@ -204,7 +448,7 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
                     {nextExercise.dayNumber ? `Day ${nextExercise.dayNumber} — ` : ""}{nextExercise.title.replace(/^Day \d+ — /, "")}
                   </div>
                   <div className="p-rb-meta">
-                    Exercise · Screenshot upload confirms completion · Next exercise unlocks on submission
+                    Submit your proof response in My Programme to mark this complete
                   </div>
                 </div>
                 <button className="p-btn p-btn-blue" onClick={() => onTabChange("programme")}>
@@ -224,7 +468,7 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
                 <div className="p-cert-name">Client Success Manual</div>
                 <div className="p-cert-sub">{capitalize(user.planTier)} plan · DocuSeal</div>
               </div>
-              <span style={{fontSize:"11px",color:"var(--tm)"}}>Pending</span>
+              <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
             </div>
             <div className="p-cert-item">
               <div className="p-cert-icon cl">S</div>
@@ -232,7 +476,7 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
                 <div className="p-cert-name">System Test</div>
                 <div className="p-cert-sub">10 questions · 8/10 to pass</div>
               </div>
-              <span style={{fontSize:"11px",color:"var(--tm)"}}>Pending</span>
+              <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
             </div>
             {user.hskdRequired && (
               <div className="p-cert-item">
@@ -241,7 +485,7 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
                   <div className="p-cert-name">HSKD Liability Sign-Off</div>
                   <div className="p-cert-sub">5 scenarios · DocuSeal required</div>
                 </div>
-                <span style={{fontSize:"11px",color:"var(--tm)"}}>Pending</span>
+                <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
               </div>
             )}
             <div className="p-cert-item">
@@ -250,11 +494,11 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
                 <div className="p-cert-name">ClearPath Certificate</div>
                 <div className="p-cert-sub">Issued when all gates pass</div>
               </div>
-              <span style={{fontSize:"11px",color:"var(--tm)"}}>Pending</span>
+              <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
             </div>
             {user.hskdRequired && (
               <div className="p-adobe-note">
-                <span style={{fontSize:"14px"}}>✍</span>
+                <span style={{ fontSize: "14px" }}>✍</span>
                 <span className="p-an-text">
                   HSKD sign-off requires formal approval via DocuSeal. All 5 scenarios must be confirmed before the document is issued.
                 </span>
@@ -282,12 +526,14 @@ function TabProgramme({
   stats,
   onExerciseComplete,
   onModuleGate,
+  onReload,
   submitting,
 }: {
   modules:            Module[];
   stats:              DashboardData["stats"];
-  onExerciseComplete: (exerciseId: string) => Promise<void>;
-  onModuleGate:       (moduleId: string)   => Promise<void>;
+  onExerciseComplete: (exerciseId: string, proofText: string) => Promise<void>;
+  onModuleGate:       (moduleId: string) => Promise<void>;
+  onReload:           () => void;
   submitting:         string | null;
 }) {
   if (modules.length === 0) {
@@ -303,22 +549,22 @@ function TabProgramme({
       <div className="p-greet">
         <h2>30-Day Programme</h2>
         <p>
-          Work through your exercises at your own pace. Save and return any time.
-          Each module gate requires a sign-off before the next unlocks.
+          Work through your exercises in order. Each exercise requires a proof response before it can be marked complete.
+          Complete all exercises, pass the module quiz, then submit the gate sign-off to unlock the next module.
         </p>
       </div>
 
       <div className="p-two-col">
         <div>
           {modules.map((mod) => {
-            const isLocked  = mod.status === "locked";
+            const isLocked   = mod.status === "locked";
             const isComplete = mod.status === "complete";
-            const isActive  = mod.status === "available";
+            const isActive   = mod.status === "available";
 
             return (
               <div key={mod.id} className={`p-card ${isActive ? "hl" : ""} ${isLocked ? "dim" : ""}`}>
                 <div className="p-mod-hdr">
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span
                       className="p-mod-hdr-title"
                       style={{ color: isComplete ? "var(--g-t)" : isActive ? "var(--b200)" : "var(--tm)" }}
@@ -329,16 +575,15 @@ function TabProgramme({
                       {isComplete ? "Complete" : isActive ? "In progress" : "Locked"}
                     </span>
                   </div>
-                  {mod.dayStart && mod.dayEnd && (
-                    <span style={{ fontSize:11, color:"var(--ts)" }}>
+                  {mod.dayStart != null && mod.dayEnd != null && (
+                    <span style={{ fontSize: 11, color: "var(--ts)" }}>
                       Days {mod.dayStart}–{mod.dayEnd}
                     </span>
                   )}
                 </div>
 
-                {/* Module gate submitted banner */}
                 {mod.gateSubmitted && (
-                  <div className="p-sign-banner" style={{ marginBottom:10 }}>
+                  <div className="p-sign-banner" style={{ marginBottom: 10 }}>
                     <div className="p-sb-icon">✓</div>
                     <div>
                       <div className="p-sb-text">Module sign-off submitted and acknowledged</div>
@@ -348,36 +593,32 @@ function TabProgramme({
                   </div>
                 )}
 
-                {/* Exercise list */}
                 {!isLocked && mod.exercises.length > 0 && (
                   <>
                     {mod.exercises.map((ex) => (
-                      <div key={ex.id} className="p-ex-row">
-                        <div
-                          className={`p-ex-check ${ex.isComplete ? "ec-done" : ex.isUnlocked ? "ec-active" : "ec-lock"}`}
-                          title={ex.isUnlocked && !ex.isComplete ? "Mark complete" : undefined}
-                          onClick={async () => {
-                            if (ex.isUnlocked && !ex.isComplete && submitting === null) {
-                              await onExerciseComplete(ex.id);
-                            }
-                          }}
-                        >
-                          {ex.isComplete ? "✓" : ""}
-                        </div>
-                        <div className={`p-ex-label ${!ex.isUnlocked ? "locked" : ""}`}>
-                          {ex.dayNumber ? `Day ${ex.dayNumber} — ` : ""}{ex.title.replace(/^Day \d+ — /, "")}
-                        </div>
-                        <div className="p-ex-day">
-                          {ex.isComplete ? "Done" : ex.isUnlocked ? "Current" : "Locked"}
-                        </div>
-                      </div>
+                      <ExerciseProofForm
+                        key={ex.id}
+                        exercise={ex}
+                        onSubmit={onExerciseComplete}
+                        submitting={submitting}
+                      />
                     ))}
 
-                    {/* Module gate: show when all exercises done but gate not submitted */}
+                    {/* Quiz section — appears after all exercises done */}
                     {mod.allExercisesDone && !mod.gateSubmitted && (
-                      <div className="p-gate-box">
+                      <div style={{ marginTop: 16 }}>
+                        <QuizPanel
+                          moduleId={mod.id}
+                          onQuizPassed={onReload}
+                        />
+                      </div>
+                    )}
+
+                    {/* Gate sign-off — only after quiz passed */}
+                    {mod.allExercisesDone && mod.quizPassed && !mod.gateSubmitted && (
+                      <div className="p-gate-box" style={{ marginTop: 12 }}>
                         <div>
-                          <div className="p-gate-text">All exercises complete — submit your module sign-off</div>
+                          <div className="p-gate-text">All exercises complete + quiz passed — submit your module sign-off</div>
                           <div className="p-gate-sub">
                             This confirms you have completed {mod.title.split("—")[0]?.trim()}. The next module unlocks on submission.
                           </div>
@@ -391,40 +632,11 @@ function TabProgramme({
                         </button>
                       </div>
                     )}
-
-                    {/* Resume box for first unlocked exercise */}
-                    {isActive && !mod.gateSubmitted && (
-                      (() => {
-                        const next = mod.exercises.find((e) => e.isUnlocked && !e.isComplete);
-                        if (!next) return null;
-                        return (
-                          <div style={{ marginTop: 12 }}>
-                            <div className="p-resume-box">
-                              <div>
-                                <div className="p-rb-title">
-                                  {next.dayNumber ? `Day ${next.dayNumber} — ` : ""}{next.title.replace(/^Day \d+ — /, "")}
-                                </div>
-                                <div className="p-rb-meta">
-                                  Click the circle above to mark complete when done in your system
-                                </div>
-                              </div>
-                              <button
-                                className="p-btn p-btn-blue"
-                                disabled={submitting === next.id}
-                                onClick={() => onExerciseComplete(next.id)}
-                              >
-                                {submitting === next.id ? "Saving…" : "Mark Done →"}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })()
-                    )}
                   </>
                 )}
 
                 {isLocked && (
-                  <div style={{ fontSize:12, color:"var(--tm)", paddingTop:4 }}>
+                  <div style={{ fontSize: 12, color: "var(--tm)", paddingTop: 4 }}>
                     Complete and submit the sign-off for the previous module to unlock.
                   </div>
                 )}
@@ -443,11 +655,11 @@ function TabProgramme({
                   {i + 1}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize:13, fontWeight:500, color:"var(--tp)", marginBottom:2 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--tp)", marginBottom: 2 }}>
                     Gate {i + 1} — {mod.title.split("—")[1]?.trim() ?? mod.title} sign-off
                   </div>
-                  <div style={{ fontSize:11, color:"var(--ts)" }}>
-                    {mod.dayEnd ? `After Day ${mod.dayEnd}` : "Module completion"}
+                  <div style={{ fontSize: 11, color: "var(--ts)" }}>
+                    {mod.dayEnd ? `After Day ${mod.dayEnd}` : "Module completion"} · Quiz required
                   </div>
                 </div>
                 <span className={`p-badge ${mod.gateSubmitted ? "b-done" : mod.status === "available" ? "b-pend" : "b-lock"}`}>
@@ -462,18 +674,18 @@ function TabProgramme({
             <div className="p-prog-row">
               <div className="p-prog-labels">
                 <span>Exercises complete</span>
-                <span style={{ color:"var(--b400)" }}>
+                <span style={{ color: "var(--b400)" }}>
                   {stats.completedExercises} of {stats.totalExercises}
                 </span>
               </div>
               <div className="p-prog-bar">
-                <div className="p-prog-fill pf-blue" style={{ width:`${stats.progressPct}%` }} />
+                <div className="p-prog-fill pf-blue" style={{ width: `${stats.progressPct}%` }} />
               </div>
             </div>
             <div className="p-prog-row">
               <div className="p-prog-labels">
                 <span>Gate sign-offs</span>
-                <span style={{ color:"var(--g-t)" }}>
+                <span style={{ color: "var(--g-t)" }}>
                   {stats.completedModules} of {stats.totalModules}
                 </span>
               </div>
@@ -484,10 +696,12 @@ function TabProgramme({
           </div>
 
           <div className="p-card">
-            <div className="p-card-title">Need Help?</div>
-            <div className="p-ql"><div className="p-ql-dot" />Exercise instructions guide</div>
-            <div className="p-ql"><div className="p-ql-dot" />How to upload screenshots</div>
-            <div className="p-ql"><div className="p-ql-dot" />Contact WiBiz support</div>
+            <div className="p-card-title">How It Works</div>
+            <div className="p-ql"><div className="p-ql-dot" />Each exercise requires a proof response</div>
+            <div className="p-ql"><div className="p-ql-dot" />Complete all exercises → module quiz unlocks</div>
+            <div className="p-ql"><div className="p-ql-dot" />Pass quiz (60%+) → gate sign-off unlocks</div>
+            <div className="p-ql"><div className="p-ql-dot" />Submit sign-off → next module unlocks</div>
+            <div className="p-ql"><div className="p-ql-dot" />Contact WiBiz support if stuck</div>
           </div>
         </div>
       </div>
@@ -495,7 +709,7 @@ function TabProgramme({
   );
 }
 
-// ─── Team tab (placeholder — staff invite in Phase 2) ─────────────────────────
+// ─── Team tab ──────────────────────────────────────────────────────────────────
 function TabTeam({ user }: { user: DashboardData["user"] }) {
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
   const av = initials(user.firstName, user.lastName, user.email);
@@ -506,16 +720,16 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
         <p>Staff invite and team progress tracking is coming soon. Your account is active below.</p>
       </div>
       <div className="p-card" style={{ maxWidth: 700 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-          <div className="p-card-title" style={{ margin:0, padding:0, border:"none" }}>Staff</div>
-          <button className="p-btn-ghost" disabled style={{ opacity:.4, cursor:"not-allowed" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div className="p-card-title" style={{ margin: 0, padding: 0, border: "none" }}>Staff</div>
+          <button className="p-btn-ghost" disabled style={{ opacity: .4, cursor: "not-allowed" }}>
             + Add staff member (coming soon)
           </button>
         </div>
         <table className="p-tt">
           <thead>
             <tr>
-              <th style={{width:"35%"}}>Staff member</th>
+              <th style={{ width: "35%" }}>Staff member</th>
               <th>Programme</th>
               <th>Role</th>
               <th>Status</th>
@@ -531,10 +745,10 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
               </td>
               <td>
                 <div className="p-mini-bar">
-                  <div className="p-mini-fill pf-blue" style={{width:"30%"}} />
+                  <div className="p-mini-fill pf-blue" style={{ width: "30%" }} />
                 </div>
               </td>
-              <td style={{fontSize:11,color:"var(--ts)"}}>Account admin</td>
+              <td style={{ fontSize: 11, color: "var(--ts)" }}>Account admin</td>
               <td><span className="p-badge b-prog">Active</span></td>
             </tr>
           </tbody>
@@ -619,7 +833,7 @@ function TabResources({ user }: { user: DashboardData["user"] }) {
                 <div className="p-cert-name">Client Success Manual</div>
                 <div className="p-cert-sub">DocuSeal signature pending</div>
               </div>
-              <span style={{fontSize:11,color:"var(--tm)"}}>Pending</span>
+              <span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span>
             </div>
             <div className="p-cert-item">
               <div className="p-cert-icon cl">S</div>
@@ -627,7 +841,7 @@ function TabResources({ user }: { user: DashboardData["user"] }) {
                 <div className="p-cert-name">System Test Certificate</div>
                 <div className="p-cert-sub">Pass the System Test to receive</div>
               </div>
-              <span style={{fontSize:11,color:"var(--tm)"}}>Pending</span>
+              <span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span>
             </div>
             {user.hskdRequired && (
               <div className="p-cert-item">
@@ -636,7 +850,7 @@ function TabResources({ user }: { user: DashboardData["user"] }) {
                   <div className="p-cert-name">HSKD Liability Sign-Off</div>
                   <div className="p-cert-sub">5 scenarios · DocuSeal required</div>
                 </div>
-                <span style={{fontSize:11,color:"var(--tm)"}}>Pending</span>
+                <span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span>
               </div>
             )}
             <div className="p-cert-item">
@@ -645,7 +859,7 @@ function TabResources({ user }: { user: DashboardData["user"] }) {
                 <div className="p-cert-name">ClearPath Certificate</div>
                 <div className="p-cert-sub">Pending all gate completions</div>
               </div>
-              <span style={{fontSize:11,color:"var(--tm)"}}>Pending</span>
+              <span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span>
             </div>
           </div>
         </div>
@@ -682,10 +896,13 @@ export default function ClientPortal() {
     navigate("/login", { replace: true });
   };
 
-  const markExerciseComplete = async (exerciseId: string) => {
+  const markExerciseComplete = async (exerciseId: string, proofText: string) => {
     setSubmitting(exerciseId);
     try {
-      await apiFetch(`/progress/exercise/${exerciseId}`, { method: "POST" });
+      await apiFetch(`/progress/exercise/${exerciseId}`, {
+        method: "POST",
+        body:   JSON.stringify({ proofText }),
+      });
       await load();
     } finally {
       setSubmitting(null);
@@ -704,14 +921,14 @@ export default function ClientPortal() {
 
   if (error) {
     return (
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", color:"var(--r-t)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--r-t)" }}>
         {error}
       </div>
     );
   }
   if (!data) {
     return (
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", color:"var(--ts)", fontSize:13 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--ts)", fontSize: 13 }}>
         Loading…
       </div>
     );
@@ -733,7 +950,6 @@ export default function ClientPortal() {
 
   return (
     <div>
-      {/* Nav */}
       <nav className="p-nav">
         <span className="p-logo">
           WiBiz <span>Academy</span>
@@ -757,9 +973,9 @@ export default function ClientPortal() {
         <div className="p-nav-user">
           <div className="p-av">{av}</div>
           <span>{displayName}</span>
-          <span style={{ color:"var(--bdr)", margin:"0 2px" }}>·</span>
+          <span style={{ color: "var(--bdr)", margin: "0 2px" }}>·</span>
           <span
-            style={{ cursor:"pointer", color:"var(--tm)" }}
+            style={{ cursor: "pointer", color: "var(--tm)" }}
             onClick={logout}
           >
             Sign out
@@ -767,7 +983,6 @@ export default function ClientPortal() {
         </div>
       </nav>
 
-      {/* Role banner */}
       <div className="p-role-banner">
         Client portal
         {planLabel && ` · ${planLabel}`}
@@ -775,7 +990,6 @@ export default function ClientPortal() {
         {" · Signal Launch confirmed"}
       </div>
 
-      {/* Tab content */}
       <div className="p-view">
         {tab === "dashboard" && (
           <TabDashboard data={data} onTabChange={setTab} />
@@ -786,6 +1000,7 @@ export default function ClientPortal() {
             stats={data.stats}
             onExerciseComplete={markExerciseComplete}
             onModuleGate={submitModuleGate}
+            onReload={load}
             submitting={submitting}
           />
         )}

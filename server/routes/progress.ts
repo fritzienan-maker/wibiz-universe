@@ -7,18 +7,25 @@ import {
   getCompletedExerciseIds,
   markExerciseComplete,
   markModuleComplete,
+  hasPassedQuiz,
 } from "../db";
 
 export const progressRouter = Router();
 progressRouter.use(requireAuth);
 
 // ─── POST /api/progress/exercise/:id ─────────────────────────────────────────
-// Mark a single exercise complete (in-portal confirmation)
+// Mark a single exercise complete — requires proof text in body
 progressRouter.post(
   "/exercise/:id",
   async (req: Request, res: Response): Promise<void> => {
-    const userId = req.user!.userId;
+    const userId     = req.user!.userId;
     const exerciseId = req.params.id!;
+
+    const proofText = (req.body?.proofText ?? "").toString().trim();
+    if (!proofText) {
+      res.status(400).json({ error: "proof_required", message: "You must submit a proof response before marking this exercise complete." });
+      return;
+    }
 
     const exercise = await getExerciseById(exerciseId);
     if (!exercise || !exercise.isActive) {
@@ -31,7 +38,7 @@ progressRouter.post(
     const moduleExercises = await listExercisesByModule(exercise.moduleId, true);
     const idx = moduleExercises.findIndex((e) => e.id === exerciseId);
     if (idx > 0) {
-      const prevId = moduleExercises[idx - 1]!.id;
+      const prevId    = moduleExercises[idx - 1]!.id;
       const completed = await getCompletedExerciseIds(userId);
       if (!completed.has(prevId)) {
         res.status(400).json({ error: "Complete the previous exercise first" });
@@ -39,17 +46,17 @@ progressRouter.post(
       }
     }
 
-    await markExerciseComplete(userId, exerciseId);
+    await markExerciseComplete(userId, exerciseId, proofText);
     res.json({ message: "exercise_complete", exerciseId });
   }
 );
 
 // ─── POST /api/progress/module/:id ───────────────────────────────────────────
-// Submit module gate sign-off (in-portal confirmation after all exercises done)
+// Submit module gate sign-off — all exercises done + quiz passed required
 progressRouter.post(
   "/module/:id",
   async (req: Request, res: Response): Promise<void> => {
-    const userId = req.user!.userId;
+    const userId   = req.user!.userId;
     const moduleId = req.params.id!;
 
     const mod = await getModuleById(moduleId);
@@ -58,7 +65,7 @@ progressRouter.post(
       return;
     }
 
-    // All active exercises must be complete before gate can be submitted
+    // All active exercises must be complete
     const exercises = await listExercisesByModule(moduleId, true);
     if (exercises.length > 0) {
       const completedIds = await getCompletedExerciseIds(userId);
@@ -67,6 +74,13 @@ progressRouter.post(
         res.status(400).json({ error: "Complete all exercises before submitting the module sign-off" });
         return;
       }
+    }
+
+    // Quiz must be passed before gate can be submitted
+    const quizPassed = await hasPassedQuiz(userId, moduleId);
+    if (!quizPassed) {
+      res.status(400).json({ error: "quiz_required", message: "Pass the module quiz before submitting the sign-off." });
+      return;
     }
 
     await markModuleComplete(userId, moduleId);

@@ -13,9 +13,12 @@ export const ENV = {
   jwtSecret:    process.env.JWT_SECRET ?? "",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   // GHL
-  ghlApiKey:         process.env.GHL_API_KEY ?? "",
-  ghlLocationId:     process.env.GHL_LOCATION_ID ?? "",
-  ghlWebhookSecret:  process.env.GHL_WEBHOOK_SECRET ?? "",
+  ghlApiKey:           process.env.GHL_API_KEY ?? "",
+  ghlLocationId:       process.env.GHL_LOCATION_ID ?? "",
+  ghlWebhookSecret:    process.env.GHL_WEBHOOK_SECRET ?? "",
+  // ID of the GHL contact custom field that receives the temporary password
+  // (the GHL workflow reads this field to send the welcome email)
+  ghlTempPassFieldId:  process.env.GHL_TEMP_PASS_FIELD_ID ?? "",
   // DocuSeal (formal document signing — Client Success Manual, HSKD, operator certs)
   docusealApiToken:  process.env.DOCUSEAL_API_TOKEN ?? "",
 };
@@ -24,9 +27,11 @@ export const ENV = {
 // Missing secrets surface in Railway deploy logs immediately.
 export function validateEnv(): void {
   const required: Array<{ key: keyof typeof ENV; label: string }> = [
-    { key: "databaseUrl",       label: "DATABASE_URL" },
-    { key: "jwtSecret",         label: "JWT_SECRET" },
-    { key: "ghlWebhookSecret",  label: "GHL_WEBHOOK_SECRET" },
+    { key: "databaseUrl",        label: "DATABASE_URL" },
+    { key: "jwtSecret",          label: "JWT_SECRET" },
+    { key: "ghlWebhookSecret",   label: "GHL_WEBHOOK_SECRET" },
+    { key: "ghlApiKey",          label: "GHL_API_KEY" },
+    { key: "ghlTempPassFieldId", label: "GHL_TEMP_PASS_FIELD_ID" },
   ];
   for (const { key, label } of required) {
     if (!ENV[key]) {
