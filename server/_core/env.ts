@@ -20,7 +20,10 @@ export const ENV = {
   // (the GHL workflow reads this field to send the welcome email)
   ghlTempPassFieldId:  process.env.GHL_TEMP_PASS_FIELD_ID ?? "",
   // DocuSeal (formal document signing — Client Success Manual, HSKD, operator certs)
-  docusealApiToken:  process.env.DOCUSEAL_API_TOKEN ?? "",
+  docusealApiToken:   process.env.DOCUSEAL_API_TOKEN ?? "",
+  docusealSignerRole: process.env.DOCUSEAL_SIGNER_ROLE ?? "First Party",
+  // GHL — staff invite URL custom field ID (optional; set to write invite link to GHL contact)
+  ghlStaffInviteFieldId: process.env.GHL_STAFF_INVITE_FIELD_ID ?? "",
 };
 
 // Startup validation — warns loudly but does not crash (BC360 pattern).

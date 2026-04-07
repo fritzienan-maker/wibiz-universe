@@ -98,6 +98,29 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
     name: "0009_backfill_submission_status_approved",
     sql: `UPDATE user_progress SET submission_status = 'approved' WHERE submission_status = 'pending_review'`,
   },
+  // ── My Team + DocuSeal (2026-04) ──────────────────────────────────────────
+  {
+    name: "0010_users_team_fields",
+    sql: `ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS client_id         UUID,
+      ADD COLUMN IF NOT EXISTS invite_token      VARCHAR(64),
+      ADD COLUMN IF NOT EXISTS invite_expires_at TIMESTAMP`,
+  },
+  {
+    name: "0011_docuseal_submissions",
+    sql: `CREATE TABLE IF NOT EXISTS docuseal_submissions (
+      id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id        UUID         NOT NULL,
+      document_type  VARCHAR(50)  NOT NULL,
+      template_id    INTEGER      NOT NULL,
+      docuseal_id    INTEGER,
+      status         VARCHAR(20)  NOT NULL DEFAULT 'pending',
+      signer_email   VARCHAR(255),
+      sent_at        TIMESTAMP    DEFAULT NOW(),
+      completed_at   TIMESTAMP,
+      created_at     TIMESTAMP    DEFAULT NOW()
+    )`,
+  },
 ];
 
 async function run(): Promise<void> {

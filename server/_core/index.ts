@@ -10,6 +10,7 @@ import { dashboardRouter } from "../routes/dashboard";
 import { adminRouter }     from "../routes/admin";
 import { progressRouter }  from "../routes/progress";
 import { quizRouter }      from "../routes/quiz";
+import { teamRouter, inviteRouter } from "../routes/team";
 import { setupVite, serveStatic } from "./vite";
 
 validateEnv();
@@ -38,12 +39,14 @@ app.get("/api/health", (_req, res) => {
 });
 
 // ─── API routes ───────────────────────────────────────────────────────────────
-app.use("/api/auth",      authRouter);
-app.use("/api/webhooks",  webhookRouter);
-app.use("/api/dashboard", dashboardRouter);
-app.use("/api/admin",     adminRouter);
-app.use("/api/progress",  progressRouter);
-app.use("/api/quiz",      quizRouter);
+app.use("/api/auth",         authRouter);
+app.use("/api/auth/invite",  inviteRouter);
+app.use("/api/webhooks",     webhookRouter);
+app.use("/api/dashboard",    dashboardRouter);
+app.use("/api/admin",        adminRouter);
+app.use("/api/progress",     progressRouter);
+app.use("/api/quiz",         quizRouter);
+app.use("/api/team",         teamRouter);
 
 // ─── Frontend (Vite dev middleware or static build) ───────────────────────────
 async function startServer(): Promise<void> {

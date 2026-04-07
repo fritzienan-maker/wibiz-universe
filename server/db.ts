@@ -361,6 +361,150 @@ export async function saveQuizResponse(
   return row!;
 }
 
+// ─── DocuSeal submissions ──────────────────────────────────────────────────────
+
+export async function createDocusealSubmission(data: {
+  userId:       string;
+  documentType: string;
+  templateId:   number;
+  docusealId:   number;
+  signerEmail:  string;
+}) {
+  const [row] = await db
+    .insert(schema.docusealSubmissions)
+    .values({ ...data, status: "pending" })
+    .returning();
+  return row!;
+}
+
+export async function getDocusealSubmissionByUser(userId: string, documentType: string) {
+  const [row] = await db
+    .select()
+    .from(schema.docusealSubmissions)
+    .where(and(
+      eq(schema.docusealSubmissions.userId, userId),
+      eq(schema.docusealSubmissions.documentType, documentType),
+    ))
+    .orderBy(desc(schema.docusealSubmissions.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function markDocusealComplete(docusealId: number) {
+  await db
+    .update(schema.docusealSubmissions)
+    .set({ status: "completed", completedAt: new Date() })
+    .where(eq(schema.docusealSubmissions.docusealId, docusealId));
+}
+
+export async function markDocusealDeclined(docusealId: number) {
+  await db
+    .update(schema.docusealSubmissions)
+    .set({ status: "declined" })
+    .where(eq(schema.docusealSubmissions.docusealId, docusealId));
+}
+
+export async function listDocusealSubmissions(limit = 100) {
+  return db
+    .select({
+      id:           schema.docusealSubmissions.id,
+      userId:       schema.docusealSubmissions.userId,
+      documentType: schema.docusealSubmissions.documentType,
+      docusealId:   schema.docusealSubmissions.docusealId,
+      status:       schema.docusealSubmissions.status,
+      signerEmail:  schema.docusealSubmissions.signerEmail,
+      sentAt:       schema.docusealSubmissions.sentAt,
+      completedAt:  schema.docusealSubmissions.completedAt,
+      userEmail:    schema.users.email,
+      userFirstName: schema.users.firstName,
+      userLastName:  schema.users.lastName,
+      planTier:     schema.users.planTier,
+    })
+    .from(schema.docusealSubmissions)
+    .innerJoin(schema.users, eq(schema.docusealSubmissions.userId, schema.users.id))
+    .orderBy(desc(schema.docusealSubmissions.createdAt))
+    .limit(limit);
+}
+
+// ─── Team / staff ──────────────────────────────────────────────────────────────
+
+export async function createStaffUser(data: {
+  email:          string;
+  passwordHash:   string;
+  clientId:       string;
+  firstName:      string | null;
+  lastName:       string | null;
+  inviteToken:    string;
+  inviteExpiresAt: Date;
+}) {
+  const [user] = await db
+    .insert(schema.users)
+    .values({
+      email:           data.email.toLowerCase().trim(),
+      passwordHash:    data.passwordHash,
+      role:            "client_staff",
+      clientId:        data.clientId,
+      firstName:       data.firstName,
+      lastName:        data.lastName,
+      inviteToken:     data.inviteToken,
+      inviteExpiresAt: data.inviteExpiresAt,
+      isActive:        false,
+    })
+    .returning();
+  return user!;
+}
+
+export async function getUserByInviteToken(token: string) {
+  const [user] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.inviteToken, token));
+  return user ?? null;
+}
+
+export async function acceptInvite(userId: string, passwordHash: string) {
+  const [user] = await db
+    .update(schema.users)
+    .set({
+      passwordHash,
+      isActive:        true,
+      activatedAt:     new Date(),
+      inviteToken:     null,
+      inviteExpiresAt: null,
+      updatedAt:       new Date(),
+    })
+    .where(eq(schema.users.id, userId))
+    .returning();
+  return user!;
+}
+
+export async function listTeamMembers(clientAdminId: string) {
+  return db
+    .select({
+      id:          schema.users.id,
+      email:       schema.users.email,
+      firstName:   schema.users.firstName,
+      lastName:    schema.users.lastName,
+      isActive:    schema.users.isActive,
+      lastLoginAt: schema.users.lastLoginAt,
+      activatedAt: schema.users.activatedAt,
+      inviteToken: schema.users.inviteToken,  // non-null = still pending
+    })
+    .from(schema.users)
+    .where(eq(schema.users.clientId, clientAdminId))
+    .orderBy(asc(schema.users.createdAt));
+}
+
+export async function deactivateStaffMember(staffId: string, clientAdminId: string) {
+  await db
+    .update(schema.users)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(
+      eq(schema.users.id, staffId),
+      eq(schema.users.clientId, clientAdminId),
+    ));
+}
+
 // ─── Webhook log ───────────────────────────────────────────────────────────────
 export async function logWebhookReceived(rawPayload: unknown) {
   const [log] = await db

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import LoginPage    from "./pages/Login";
 import ClientPortal  from "./pages/ClientPortal";
 import AdminPage    from "./pages/Admin";
+import InviteAccept from "./pages/InviteAccept";
 import { apiFetch, ApiError } from "./lib/api";
 
 // ─── Auth state hook ──────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ export default function App() {
           path="/admin"
           element={<AdminRoute><AdminPage /></AdminRoute>}
         />
+        <Route path="/invite/:token" element={<InviteAccept />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

@@ -17,7 +17,11 @@ import {
   deleteExercise,
   listSubmissionsForReview,
   reviewSubmission,
+  listDocusealSubmissions,
+  createDocusealSubmission,
+  getUserById,
 } from "../db";
+import { sendCsmDocument } from "../services/docuseal";
 
 export const adminRouter = Router();
 
@@ -179,6 +183,42 @@ adminRouter.get("/submissions", async (req, res): Promise<void> => {
   const filter = status && valid.includes(status) ? status : undefined;
   const rows   = await listSubmissionsForReview(filter);
   res.json({ submissions: rows });
+});
+
+// ─── DocuSeal ─────────────────────────────────────────────────────────────────
+
+// GET /api/admin/docuseal — list all CSM submissions
+adminRouter.get("/docuseal", async (_req, res): Promise<void> => {
+  const rows = await listDocusealSubmissions();
+  res.json({ submissions: rows });
+});
+
+// POST /api/admin/users/:id/send-csm — (re)send CSM to a specific user
+adminRouter.post("/users/:id/send-csm", async (req, res): Promise<void> => {
+  const user = await getUserById(req.params.id!);
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  if (!user.planTier) {
+    res.status(400).json({ error: "User has no plan tier set — cannot determine CSM template." });
+    return;
+  }
+  try {
+    const { submissionId, templateId } = await sendCsmDocument({
+      email:     user.email,
+      firstName: user.firstName,
+      lastName:  user.lastName,
+      planTier:  user.planTier,
+    });
+    await createDocusealSubmission({
+      userId:       user.id,
+      documentType: "client_success_manual",
+      templateId,
+      docusealId:   submissionId,
+      signerEmail:  user.email,
+    });
+    res.json({ message: "csm_sent", submissionId });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "DocuSeal send failed" });
+  }
 });
 
 // PUT /api/admin/submissions/:id/review — approve or reject with optional note

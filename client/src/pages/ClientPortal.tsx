@@ -841,49 +841,264 @@ function TabProgramme({
 }
 
 // ─── Team tab ──────────────────────────────────────────────────────────────────
+interface TeamMember {
+  id:                string;
+  email:             string;
+  firstName:         string | null;
+  lastName:          string | null;
+  isActive:          boolean;
+  isPending:         boolean;
+  lastLoginAt:       string | null;
+  activatedAt:       string | null;
+  approvedExercises: number;
+  completedModules:  number;
+  totalModules:      number;
+}
+
 function TabTeam({ user }: { user: DashboardData["user"] }) {
-  const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
-  const av = initials(user.firstName, user.lastName, user.email);
+  const [team,        setTeam]        = useState<TeamMember[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [teamError,   setTeamError]   = useState("");
+  const [showInvite,  setShowInvite]  = useState(false);
+  const [invEmail,    setInvEmail]    = useState("");
+  const [invFirst,    setInvFirst]    = useState("");
+  const [invLast,     setInvLast]     = useState("");
+  const [inviting,    setInviting]    = useState(false);
+  const [inviteErr,   setInviteErr]   = useState("");
+  const [invitedUrl,  setInvitedUrl]  = useState<string | null>(null);
+  const [removing,    setRemoving]    = useState<string | null>(null);
+
+  const loadTeam = useCallback(async () => {
+    setLoading(true);
+    setTeamError("");
+    try {
+      const d = await apiFetch<{ team: TeamMember[] }>("/team");
+      setTeam(d.team);
+    } catch {
+      setTeamError("Failed to load team.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadTeam(); }, [loadTeam]);
+
+  const sendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteErr("");
+    setInviting(true);
+    try {
+      const res = await apiFetch<{ inviteUrl: string }>("/team/invite", {
+        method: "POST",
+        body:   JSON.stringify({ email: invEmail, firstName: invFirst || null, lastName: invLast || null }),
+      });
+      setInvitedUrl(res.inviteUrl);
+      setInvEmail(""); setInvFirst(""); setInvLast("");
+      await loadTeam();
+    } catch (err) {
+      setInviteErr(err instanceof ApiError ? (err.message ?? "Failed to send invite.") : "Something went wrong.");
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const deactivate = async (memberId: string) => {
+    if (!confirm("Deactivate this staff member? They won't be able to log in.")) return;
+    setRemoving(memberId);
+    try {
+      await apiFetch(`/team/${memberId}`, { method: "DELETE" });
+      await loadTeam();
+    } catch {
+      // ignore, reload anyway
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const selfAv = initials(user.firstName, user.lastName, user.email);
+  const selfName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
+
   return (
     <>
       <div className="p-greet">
         <h2>My Team</h2>
-        <p>Staff invite and team progress tracking is coming soon. Your account is active below.</p>
+        <p>Invite staff members to join your WiBiz Academy portal. Track their programme progress below.</p>
       </div>
-      <div className="p-card" style={{ maxWidth: 700 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div className="p-card-title" style={{ margin: 0, padding: 0, border: "none" }}>Staff</div>
-          <button className="p-btn-ghost" disabled style={{ opacity: .4, cursor: "not-allowed" }}>
-            + Add staff member (coming soon)
-          </button>
+
+      {/* Invite form card */}
+      <div className="p-card" style={{ maxWidth: 700, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showInvite ? 16 : 0 }}>
+          <div className="p-card-title" style={{ margin: 0, padding: 0, border: "none" }}>Invite a Staff Member</div>
+          {!showInvite && (
+            <button className="p-btn p-btn-blue" style={{ fontSize: 12, padding: "7px 14px" }} onClick={() => { setShowInvite(true); setInvitedUrl(null); }}>
+              + Add staff member
+            </button>
+          )}
         </div>
-        <table className="p-tt">
-          <thead>
-            <tr>
-              <th style={{ width: "35%" }}>Staff member</th>
-              <th>Programme</th>
-              <th>Role</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>
-                <div className="p-mem-cell">
-                  <div className="p-sm-av">{av}</div>
-                  {displayName} (you)
+
+        {showInvite && (
+          <>
+            {invitedUrl ? (
+              <div style={{ background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "14px 16px", marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--g-t)", marginBottom: 6 }}>Invite created — GHL workflow will email the invite link.</div>
+                <div style={{ fontSize: 11, color: "var(--ts)", marginBottom: 8 }}>Or share this link directly:</div>
+                <div style={{ fontSize: 11, background: "var(--s1)", padding: "6px 10px", borderRadius: 6, wordBreak: "break-all", color: "var(--b400)", fontFamily: "monospace" }}>
+                  {invitedUrl}
                 </div>
-              </td>
-              <td>
-                <div className="p-mini-bar">
-                  <div className="p-mini-fill pf-blue" style={{ width: "30%" }} />
+                <button
+                  style={{ marginTop: 10, fontSize: 11, color: "var(--ts)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                  onClick={() => { navigator.clipboard.writeText(invitedUrl); }}
+                >
+                  Copy link
+                </button>
+              </div>
+            ) : null}
+
+            <form onSubmit={sendInvite}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>First name</label>
+                  <input
+                    type="text"
+                    value={invFirst}
+                    onChange={(e) => setInvFirst(e.target.value)}
+                    placeholder="Optional"
+                    style={{ width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" }}
+                  />
                 </div>
-              </td>
-              <td style={{ fontSize: 11, color: "var(--ts)" }}>Account admin</td>
-              <td><span className="p-badge b-prog">Active</span></td>
-            </tr>
-          </tbody>
-        </table>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Last name</label>
+                  <input
+                    type="text"
+                    value={invLast}
+                    onChange={(e) => setInvLast(e.target.value)}
+                    placeholder="Optional"
+                    style={{ width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" }}
+                  />
+                </div>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Email address <span style={{ color: "var(--r-t)" }}>*</span></label>
+                <input
+                  type="email"
+                  value={invEmail}
+                  onChange={(e) => { setInvEmail(e.target.value); setInviteErr(""); }}
+                  placeholder="staff@yourbusiness.com"
+                  required
+                  style={{ width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" }}
+                />
+              </div>
+              {inviteErr && (
+                <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>
+                  {inviteErr}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button type="button" className="p-btn-ghost" onClick={() => { setShowInvite(false); setInviteErr(""); setInvitedUrl(null); }}>Cancel</button>
+                <button type="submit" className="p-btn p-btn-blue" disabled={inviting}>
+                  {inviting ? "Sending…" : "Send Invite →"}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
+
+      {/* Team table */}
+      <div className="p-card" style={{ maxWidth: 700 }}>
+        <div className="p-card-title">Staff Members</div>
+
+        {loading ? (
+          <div style={{ fontSize: 13, color: "var(--ts)", padding: "12px 0" }}>Loading team…</div>
+        ) : teamError ? (
+          <div style={{ fontSize: 13, color: "var(--r-t)" }}>{teamError}</div>
+        ) : (
+          <table className="p-tt">
+            <thead>
+              <tr>
+                <th style={{ width: "38%" }}>Staff member</th>
+                <th>Progress</th>
+                <th>Status</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {/* Self row */}
+              <tr>
+                <td>
+                  <div className="p-mem-cell">
+                    <div className="p-sm-av">{selfAv}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--tp)" }}>{selfName}</div>
+                      <div style={{ fontSize: 11, color: "var(--ts)" }}>Account admin</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{ fontSize: 11, color: "var(--ts)" }}>—</td>
+                <td><span className="p-badge b-done">Active</span></td>
+                <td />
+              </tr>
+
+              {team.length === 0 && (
+                <tr>
+                  <td colSpan={4} style={{ fontSize: 12, color: "var(--ts)", paddingTop: 10, paddingBottom: 4 }}>
+                    No staff members yet. Invite someone above.
+                  </td>
+                </tr>
+              )}
+
+              {team.map((m) => {
+                const name = [m.firstName, m.lastName].filter(Boolean).join(" ") || m.email;
+                const av   = initials(m.firstName, m.lastName, m.email);
+                const modPct = m.totalModules > 0 ? Math.round((m.completedModules / m.totalModules) * 100) : 0;
+                return (
+                  <tr key={m.id}>
+                    <td>
+                      <div className="p-mem-cell">
+                        <div className="p-sm-av" style={{ opacity: m.isPending ? 0.5 : 1 }}>{av}</div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: m.isActive ? "var(--tp)" : "var(--ts)" }}>{name}</div>
+                          <div style={{ fontSize: 11, color: "var(--ts)" }}>{m.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      {m.isPending ? (
+                        <span style={{ fontSize: 11, color: "var(--ts)" }}>Invite pending</span>
+                      ) : (
+                        <div style={{ minWidth: 90 }}>
+                          <div className="p-mini-bar">
+                            <div className="p-mini-fill pf-blue" style={{ width: `${modPct}%` }} />
+                          </div>
+                          <div style={{ fontSize: 10, color: "var(--ts)", marginTop: 2 }}>
+                            {m.completedModules}/{m.totalModules} modules · {m.approvedExercises} exercises
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`p-badge ${m.isPending ? "b-pend" : m.isActive ? "b-prog" : "b-lock"}`}>
+                        {m.isPending ? "Invited" : m.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      {m.isActive && (
+                        <button
+                          className="p-btn-ghost"
+                          style={{ fontSize: 11, padding: "3px 8px", color: "var(--r-t)" }}
+                          disabled={removing === m.id}
+                          onClick={() => deactivate(m.id)}
+                        >
+                          {removing === m.id ? "…" : "Deactivate"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </>
   );

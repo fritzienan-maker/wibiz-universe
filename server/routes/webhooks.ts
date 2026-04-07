@@ -24,7 +24,11 @@ import {
   getUserByGhlContactId,
   createUser,
   logSyncEvent,
+  createDocusealSubmission,
+  markDocusealComplete,
+  markDocusealDeclined,
 } from "../db";
+import { sendCsmDocument } from "../services/docuseal";
 
 export const webhookRouter = Router();
 
@@ -219,7 +223,30 @@ webhookRouter.post(
       console.info(`[webhook] Temp password written to GHL contact ${contact_id}`);
     }
 
-    // Step 9 — Log success
+    // Step 9 — Auto-send Client Success Manual via DocuSeal (fire-and-forget)
+    if (plan_tier && ENV.docusealApiToken) {
+      sendCsmDocument({
+        email:     newUser.email,
+        firstName: newUser.firstName,
+        lastName:  newUser.lastName,
+        planTier:  plan_tier,
+      })
+        .then(async ({ submissionId, templateId }) => {
+          await createDocusealSubmission({
+            userId:      newUser.id,
+            documentType: "client_success_manual",
+            templateId,
+            docusealId:  submissionId,
+            signerEmail: newUser.email,
+          }).catch(() => null);
+          console.info(`[webhook] CSM sent via DocuSeal: submissionId=${submissionId}`);
+        })
+        .catch((err: Error) => {
+          console.warn("[webhook] DocuSeal CSM send failed:", err.message);
+        });
+    }
+
+    // Step 10 — Log success
     if (logId) await markWebhookProcessed(logId).catch(() => null);
     await logSyncEvent({
       entityType:    "user",
@@ -241,5 +268,38 @@ webhookRouter.get(
   "/ghl/provision",
   (_req: Request, res: Response): void => {
     res.json({ status: "ok", message: "WiBiz Academy webhook endpoint is active" });
+  }
+);
+
+// ─── POST /api/webhooks/docuseal/events ───────────────────────────────────────
+// DocuSeal calls this when a submission is completed or declined.
+// Configure this URL in DocuSeal: Settings → Webhooks → add endpoint.
+webhookRouter.post(
+  "/docuseal/events",
+  async (req: Request, res: Response): Promise<void> => {
+    const event = req.body?.event_type as string | undefined;
+    const data  = req.body?.data as Record<string, unknown> | undefined;
+
+    if (!event || !data) {
+      res.status(400).json({ error: "Invalid payload" });
+      return;
+    }
+
+    // DocuSeal submission ID is in data.id
+    const submissionId = data.id as number | undefined;
+    if (!submissionId) {
+      res.status(400).json({ error: "Missing data.id" });
+      return;
+    }
+
+    if (event === "submission.completed") {
+      await markDocusealComplete(submissionId).catch(() => null);
+      console.info(`[docuseal] Submission ${submissionId} completed`);
+    } else if (event === "submission.declined" || event === "submission.expired") {
+      await markDocusealDeclined(submissionId).catch(() => null);
+      console.info(`[docuseal] Submission ${submissionId} ${event}`);
+    }
+
+    res.json({ received: true });
   }
 );

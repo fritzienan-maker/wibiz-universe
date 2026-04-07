@@ -45,12 +45,31 @@ export const users = pgTable("users", {
   lastName:      varchar("last_name", { length: 100 }),
   planTier:      planTierEnum("plan_tier"),
   vertical:      varchar("vertical", { length: 100 }),
-  hskdRequired:  boolean("hskd_required").default(false),
-  isActive:      boolean("is_active").default(true),
-  activatedAt:   timestamp("activated_at"),
-  lastLoginAt:   timestamp("last_login_at"),
+  hskdRequired:     boolean("hskd_required").default(false),
+  isActive:         boolean("is_active").default(true),
+  activatedAt:      timestamp("activated_at"),
+  lastLoginAt:      timestamp("last_login_at"),
+  createdAt:        timestamp("created_at").defaultNow(),
+  updatedAt:        timestamp("updated_at").defaultNow(),
+  // Staff / team fields
+  clientId:         uuid("client_id"),            // set for client_staff; null for client_admin
+  inviteToken:      varchar("invite_token", { length: 64 }),
+  inviteExpiresAt:  timestamp("invite_expires_at"),
+});
+
+// ─── DocuSeal Submissions ─────────────────────────────────────────────────────
+// One row per document send. document_type: 'client_success_manual' | 'hskd' | 'operator_conduct'
+export const docusealSubmissions = pgTable("docuseal_submissions", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  userId:        uuid("user_id").notNull(),
+  documentType:  varchar("document_type", { length: 50 }).notNull(),
+  templateId:    integer("template_id").notNull(),
+  docusealId:    integer("docuseal_id"),           // DocuSeal's submission ID
+  status:        varchar("status", { length: 20 }).notNull().default("pending"), // pending | completed | declined
+  signerEmail:   varchar("signer_email", { length: 255 }),
+  sentAt:        timestamp("sent_at").defaultNow(),
+  completedAt:   timestamp("completed_at"),
   createdAt:     timestamp("created_at").defaultNow(),
-  updatedAt:     timestamp("updated_at").defaultNow(),
 });
 
 // ─── Sync Events ──────────────────────────────────────────────────────────────
