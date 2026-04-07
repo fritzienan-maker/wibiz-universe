@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch, ApiError } from "../lib/api";
+import { useTheme } from "../lib/theme";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Exercise {
@@ -1005,6 +1006,7 @@ export default function ClientPortal() {
   const [tab,        setTab]        = useState<Tab>("dashboard");
   const [submitting, setSubmitting] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
 
   const load = useCallback(async () => {
     try {
@@ -1101,13 +1103,13 @@ export default function ClientPortal() {
           )}
         </div>
         <div className="p-nav-user">
+          <button className="p-theme-btn" onClick={toggle} title="Toggle light/dark mode">
+            {theme === "dark" ? "☀ Light" : "☾ Dark"}
+          </button>
           <div className="p-av">{av}</div>
           <span>{displayName}</span>
           <span style={{ color: "var(--bdr)", margin: "0 2px" }}>·</span>
-          <span
-            style={{ cursor: "pointer", color: "var(--tm)" }}
-            onClick={logout}
-          >
+          <span style={{ cursor: "pointer", color: "var(--tm)" }} onClick={logout}>
             Sign out
           </span>
         </div>

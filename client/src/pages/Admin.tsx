@@ -1,6 +1,7 @@
 import { useEffect, useState, Fragment } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { apiFetch, ApiError } from "../lib/api";
+import { useTheme } from "../lib/theme";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface UserRow {
@@ -622,6 +623,7 @@ export default function AdminPage() {
   const [deleting,    setDeleting]    = useState<string | null>(null);
 
   const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
 
   const loadAll = async () => {
     const [u, s, w, m] = await Promise.all([
@@ -740,12 +742,17 @@ export default function AdminPage() {
           <span className="text-muted-foreground">/</span>
           <span className="font-semibold text-foreground">Admin</span>
         </div>
-        <button
-          onClick={logout}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-3">
+          <button className="p-theme-btn" onClick={toggle} title="Toggle light/dark mode">
+            {theme === "dark" ? "☀ Light" : "☾ Dark"}
+          </button>
+          <button
+            onClick={logout}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">

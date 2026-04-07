@@ -63,6 +63,41 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
       created_at TIMESTAMP DEFAULT NOW()
     )`,
   },
+  // ── Submission review workflow (2026-04) ──────────────────────────────────
+  {
+    name: "0005_submission_status_enum",
+    sql: `DO $$ BEGIN
+      CREATE TYPE submission_status AS ENUM ('pending_review', 'approved', 'rejected');
+    EXCEPTION WHEN duplicate_object THEN null; END $$`,
+  },
+  {
+    name: "0006_exercises_video_url",
+    sql: `ALTER TABLE exercises ADD COLUMN IF NOT EXISTS video_url TEXT`,
+  },
+  {
+    name: "0007_user_progress_rename_completed_at",
+    sql: `DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'user_progress' AND column_name = 'completed_at'
+      ) THEN
+        ALTER TABLE user_progress RENAME COLUMN completed_at TO submitted_at;
+      END IF;
+    END $$`,
+  },
+  {
+    name: "0008_user_progress_submission_cols",
+    sql: `ALTER TABLE user_progress
+      ADD COLUMN IF NOT EXISTS proof_image_url    TEXT,
+      ADD COLUMN IF NOT EXISTS submission_status  submission_status NOT NULL DEFAULT 'pending_review',
+      ADD COLUMN IF NOT EXISTS reviewed_at        TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS reviewed_by        UUID,
+      ADD COLUMN IF NOT EXISTS review_note        TEXT`,
+  },
+  {
+    name: "0009_backfill_submission_status_approved",
+    sql: `UPDATE user_progress SET submission_status = 'approved' WHERE submission_status = 'pending_review'`,
+  },
 ];
 
 async function run(): Promise<void> {

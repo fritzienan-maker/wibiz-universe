@@ -283,6 +283,106 @@ body {
 .p-quiz-opt.selected{border-color:var(--b600);background:#0a1e38;color:var(--b200)}
 .b-warn{background:var(--r-bg);color:var(--r-t);border:1px solid var(--r-b)}
 
+/* ── THEME TOGGLE BUTTON ── */
+.p-theme-btn{
+  background:transparent;border:1px solid var(--bhi);border-radius:20px;
+  padding:3px 10px;font-size:11px;color:var(--ts);cursor:pointer;
+  font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap;
+  display:flex;align-items:center;gap:5px;
+}
+.p-theme-btn:hover{border-color:var(--b600);color:var(--tp)}
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT THEME — applied via html[data-theme="light"]
+══════════════════════════════════════════════════════════ */
+html[data-theme="light"] {
+  /* Tailwind / Shadcn tokens */
+  --background:         #f2f6fb;
+  --foreground:         #0f1e2e;
+  --card:               #ffffff;
+  --card-foreground:    #0f1e2e;
+  --primary:            #185FA5;
+  --primary-foreground: #ffffff;
+  --muted:              #e6edf5;
+  --muted-foreground:   #4a6280;
+  --border:             #c5d4e4;
+  --input:              #e6edf5;
+  --destructive:        #b91c1c;
+  --accent:             #2672b8;
+  --accent-foreground:  #ffffff;
+
+  /* Surface scale — light */
+  --s0:#f2f6fb;
+  --s1:#ffffff;
+  --s2:#f7f9fc;
+  --s3:#edf2f8;
+  --s4:#dde6f0;
+
+  /* Borders */
+  --bdr:#c5d4e4;
+  --bhi:#a0b8d0;
+
+  /* Text */
+  --tp:#0f1e2e;
+  --ts:#4a6280;
+  --tm:#7090aa;
+
+  /* Blue accent (readable on light) */
+  --b900:#042C53;
+  --b800:#0C447C;
+  --b700:#185FA5;
+  --b600:#2672b8;
+  --b500:#378ADD;
+  --b400:#1a5fa5;   /* darker for light-bg legibility */
+  --b200:#0d3a6e;   /* heading blue on light */
+  --b100:#ffffff;   /* stays white (used on blue bg) */
+
+  /* Status colours — softer for light */
+  --g-bg:#dcfce7;--g-t:#166534;--g-b:#86efac;
+  --a-bg:#fef9c3;--a-t:#854d0e;--a-b:#fde68a;
+  --r-bg:#fee2e2;--r-t:#991b1b;--r-b:#fca5a5;
+
+  /* Amber text / icon */
+  --am:#b45309;
+}
+
+/* Body background in light mode */
+html[data-theme="light"] body { background:#f2f6fb; color:#0f1e2e; }
+
+/* Hardcoded dark values that need explicit light overrides */
+html[data-theme="light"] .p-role-banner   { background:#e0ecf8; color:#1a5fa5; }
+html[data-theme="light"] .p-resume-box    { background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 100%); border-color:#bfdbfe; }
+html[data-theme="light"] .p-rb-title      { color:#1e3a5f; }
+html[data-theme="light"] .p-sign-banner   { background:linear-gradient(90deg,#dcfce7 0%,#eff6ff 100%); border-color:#86efac; }
+html[data-theme="light"] .p-sb-text       { color:#166534; }
+html[data-theme="light"] .p-sb-sub        { color:#4ade80; color:#2d6a4f; }
+html[data-theme="light"] .p-gate-sub      { color:#92400e; }
+html[data-theme="light"] .p-btn-amber:hover:not(:disabled) { background:#fef3c7; border-color:#f59e0b; }
+html[data-theme="light"] .p-adobe-note    { background:#fff7ed; border-color:#fed7aa; }
+html[data-theme="light"] .p-an-text       { color:#c2410c; }
+html[data-theme="light"] .p-img-remove    { background:#f1f5f9; color:#64748b; border-color:#cbd5e1; }
+html[data-theme="light"] .p-quiz-opt.selected { background:#dbeafe; color:#1e3a5f; border-color:#93c5fd; }
+html[data-theme="light"] .b-prog          { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+html[data-theme="light"] .ic-loom         { background:#f3e8ff; color:#7c3aed; border-color:#d8b4fe; }
+html[data-theme="light"] .ic-test         { background:#d1fae5; color:#065f46; border-color:#6ee7b7; }
+html[data-theme="light"] .ic-hskd         { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+html[data-theme="light"] .ic-res          { background:#ede9fe; color:#5b21b6; border-color:#c4b5fd; }
+html[data-theme="light"] .p-quiz-icon     { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+
+/* Admin Tailwind overrides for light mode */
+html[data-theme="light"] .bg-background   { background-color:#f2f6fb !important; }
+html[data-theme="light"] .bg-card         { background-color:#ffffff !important; }
+html[data-theme="light"] .text-foreground { color:#0f1e2e !important; }
+html[data-theme="light"] .text-muted-foreground { color:#4a6280 !important; }
+html[data-theme="light"] .border-border   { border-color:#c5d4e4 !important; }
+html[data-theme="light"] .bg-muted        { background-color:#e6edf5 !important; }
+html[data-theme="light"] .bg-muted\/20    { background-color:rgba(198,213,228,.2) !important; }
+html[data-theme="light"] .bg-muted\/10    { background-color:rgba(198,213,228,.1) !important; }
+html[data-theme="light"] .bg-muted\/40    { background-color:rgba(198,213,228,.4) !important; }
+html[data-theme="light"] .hover\:bg-muted\/20:hover { background-color:rgba(198,213,228,.2) !important; }
+html[data-theme="light"] .hover\:bg-muted\/40:hover { background-color:rgba(198,213,228,.4) !important; }
+html[data-theme="light"] .hover\:bg-muted\/10:hover { background-color:rgba(198,213,228,.1) !important; }
+
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
   .p-nav{padding:8px 14px;flex-wrap:wrap;height:auto;gap:8px}
