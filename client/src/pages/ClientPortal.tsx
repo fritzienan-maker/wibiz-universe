@@ -4,30 +4,36 @@ import { apiFetch, ApiError } from "../lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Exercise {
-  id:          string;
-  title:       string;
-  description: string | null;
-  proofPrompt: string | null;
-  dayNumber:   number | null;
-  orderIndex:  number;
-  isComplete:  boolean;
-  isUnlocked:  boolean;
+  id:               string;
+  title:            string;
+  description:      string | null;
+  proofPrompt:      string | null;
+  videoUrl:         string | null;
+  dayNumber:        number | null;
+  orderIndex:       number;
+  isComplete:       boolean;
+  isUnlocked:       boolean;
+  submissionStatus: "pending_review" | "approved" | "rejected" | null;
+  proofText:        string | null;
+  proofImageUrl:    string | null;
+  reviewNote:       string | null;
 }
 
 interface Module {
-  id:                 string;
-  title:              string;
-  description:        string | null;
-  dayStart:           number | null;
-  dayEnd:             number | null;
-  orderIndex:         number;
-  status:             "available" | "locked" | "complete";
-  gateSubmitted:      boolean;
-  allExercisesDone:   boolean;
-  quizPassed:         boolean;
-  exercises:          Exercise[];
-  completedExercises: number;
-  totalExercises:     number;
+  id:                    string;
+  title:                 string;
+  description:           string | null;
+  dayStart:              number | null;
+  dayEnd:                number | null;
+  orderIndex:            number;
+  status:                "available" | "locked" | "complete";
+  gateSubmitted:         boolean;
+  allExercisesDone:      boolean;
+  allExercisesSubmitted: boolean;
+  quizPassed:            boolean;
+  exercises:             Exercise[];
+  completedExercises:    number;
+  totalExercises:        number;
 }
 
 interface DashboardData {
@@ -78,6 +84,45 @@ function capitalize(s: string | null) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// ─── Video embed helper ───────────────────────────────────────────────────────
+function getVideoEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtube.com")) {
+      const v = u.searchParams.get("v");
+      return v ? `https://www.youtube.com/embed/${v}` : null;
+    }
+    if (u.hostname === "youtu.be") {
+      return `https://www.youtube.com/embed${u.pathname}`;
+    }
+    if (u.hostname.includes("loom.com")) {
+      return url.replace("loom.com/share/", "loom.com/embed/");
+    }
+    if (u.hostname.includes("vimeo.com")) {
+      return `https://player.vimeo.com/video${u.pathname}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Cloudinary unsigned upload ───────────────────────────────────────────────
+async function uploadToCloudinary(file: File): Promise<string> {
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string;
+  const preset    = (import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string) ?? "wibiz_academy";
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("upload_preset", preset);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: "POST",
+    body:   fd,
+  });
+  if (!res.ok) throw new Error("Upload failed");
+  const data = await res.json();
+  return data.secure_url as string;
+}
+
 // ─── Exercise proof form ──────────────────────────────────────────────────────
 function ExerciseProofForm({
   exercise,
@@ -85,25 +130,45 @@ function ExerciseProofForm({
   submitting,
 }: {
   exercise:   Exercise;
-  onSubmit:   (exerciseId: string, proofText: string) => Promise<void>;
+  onSubmit:   (exerciseId: string, proofText: string, proofImageUrl: string | null) => Promise<void>;
   submitting: string | null;
 }) {
   const [open,      setOpen]      = useState(false);
-  const [proofText, setProofText] = useState("");
+  const [proofText, setProofText] = useState(exercise.proofText ?? "");
+  const [imageUrl,  setImageUrl]  = useState(exercise.proofImageUrl ?? "");
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState("");
   const [error,     setError]     = useState("");
 
-  if (exercise.isComplete) {
-    return (
-      <div className="p-ex-row">
-        <div className="p-ex-check ec-done">✓</div>
-        <div className="p-ex-label">
-          {exercise.dayNumber ? `Day ${exercise.dayNumber} — ` : ""}
-          {exercise.title.replace(/^Day \d+ — /, "")}
-        </div>
-        <div className="p-ex-day" style={{ color: "var(--g-t)" }}>Done</div>
-      </div>
-    );
-  }
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
+  const status     = exercise.submissionStatus;
+  const isApproved = status === "approved";
+  const isPending  = status === "pending_review";
+  const isRejected = status === "rejected";
+  const hasSubmission = status !== null;
+
+  // Keep form in sync if parent reloads data
+  useEffect(() => {
+    setProofText(exercise.proofText ?? "");
+    setImageUrl(exercise.proofImageUrl ?? "");
+  }, [exercise.proofText, exercise.proofImageUrl]);
+
+  const embedUrl = exercise.videoUrl ? getVideoEmbedUrl(exercise.videoUrl) : null;
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !cloudName) return;
+    setUploading(true);
+    setUploadErr("");
+    try {
+      const url = await uploadToCloudinary(file);
+      setImageUrl(url);
+    } catch {
+      setUploadErr("Upload failed. Try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (!exercise.isUnlocked) {
     return (
@@ -118,58 +183,122 @@ function ExerciseProofForm({
     );
   }
 
+  const checkClass = isApproved ? "ec-done" : isPending ? "ec-pend" : isRejected ? "ec-rej" : "ec-active";
+  const checkIcon  = isApproved ? "✓"       : isPending ? "⋯"      : isRejected ? "!"      : open ? "▾" : "○";
+  const rowColor   = isApproved ? "var(--g-t)" : isPending ? "var(--am)" : isRejected ? "var(--r-t)" : "var(--b400)";
+  const rowLabel   = isApproved ? "Approved ✓" : isPending ? "Pending review…" : isRejected ? "Rejected — re-submit" : open ? "Collapse" : "Submit proof →";
+
   return (
     <div className="p-proof-wrap">
-      <div
-        className="p-ex-row"
-        style={{ cursor: "pointer" }}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <div className="p-ex-check ec-active">{open ? "▾" : "○"}</div>
+      <div className="p-ex-row" style={{ cursor: "pointer" }} onClick={() => setOpen((o) => !o)}>
+        <div className={`p-ex-check ${checkClass}`}>{checkIcon}</div>
         <div className="p-ex-label">
           {exercise.dayNumber ? `Day ${exercise.dayNumber} — ` : ""}
           {exercise.title.replace(/^Day \d+ — /, "")}
         </div>
-        <div className="p-ex-day" style={{ color: "var(--b400)" }}>
-          {open ? "Collapse" : "Submit proof →"}
-        </div>
+        <div className="p-ex-day" style={{ color: rowColor }}>{rowLabel}</div>
       </div>
 
       {open && (
         <div className="p-proof-form">
+          {/* Video embed */}
+          {exercise.videoUrl && (
+            <div className="p-video-wrap">
+              {embedUrl ? (
+                <iframe
+                  src={embedUrl}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title="Exercise video"
+                />
+              ) : (
+                <a href={exercise.videoUrl} target="_blank" rel="noopener noreferrer" className="p-video-link">
+                  ▶ Watch Video
+                </a>
+              )}
+            </div>
+          )}
+
           {exercise.description && (
             <div className="p-proof-desc">{exercise.description}</div>
           )}
+
+          {/* Status row */}
+          <div className="p-sub-status-row">
+            {isApproved && <span className="p-badge b-done">Approved</span>}
+            {isPending  && <span className="p-badge b-pend">Pending Review</span>}
+            {isRejected && <span className="p-badge b-rej">Rejected — Please Re-submit</span>}
+            {!hasSubmission && <span style={{ fontSize: 12, color: "var(--ts)" }}>Not yet submitted</span>}
+          </div>
+
+          {/* Rejection feedback */}
+          {isRejected && exercise.reviewNote && (
+            <div className="p-reject-note">
+              <strong>Staff feedback:</strong> {exercise.reviewNote}
+            </div>
+          )}
+
+          {/* Screenshot preview */}
+          {imageUrl && (
+            <div className="p-img-preview">
+              <img src={imageUrl} alt="Proof screenshot" />
+              <button className="p-img-remove" onClick={() => setImageUrl("")}>✕ Remove</button>
+            </div>
+          )}
+
+          {/* Proof text */}
           {exercise.proofPrompt && (
             <label className="p-proof-label">{exercise.proofPrompt}</label>
           )}
           <textarea
             className="p-proof-ta"
             rows={4}
-            placeholder="Type your response here…"
+            placeholder="Describe what you did, what you noticed, or paste your results here…"
             value={proofText}
             onChange={(e) => { setProofText(e.target.value); setError(""); }}
           />
+
+          {/* Screenshot upload (only shown if Cloudinary is configured) */}
+          {cloudName && (
+            <div className="p-img-upload-row">
+              <label className="p-img-upload-btn">
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  disabled={uploading}
+                  onChange={handleFileChange}
+                />
+                {uploading ? "Uploading…" : imageUrl ? "Replace screenshot" : "📎 Attach screenshot"}
+              </label>
+              {uploadErr && <span style={{ fontSize: 12, color: "var(--r-t)" }}>{uploadErr}</span>}
+            </div>
+          )}
+
           {error && <div className="p-proof-err">{error}</div>}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button
-              className="p-btn-ghost"
-              onClick={() => { setOpen(false); setError(""); setProofText(""); }}
-            >
-              Cancel
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
+            <button className="p-btn-ghost" onClick={() => { setOpen(false); setError(""); }}>
+              Collapse
             </button>
             <button
-              className="p-btn p-btn-blue"
-              disabled={submitting === exercise.id}
+              className={`p-btn ${isRejected ? "p-btn-amber" : "p-btn-blue"}`}
+              disabled={submitting === exercise.id || uploading}
               onClick={async () => {
                 if (!proofText.trim()) {
-                  setError("Your proof response is required before marking this exercise complete.");
+                  setError("A written proof response is required.");
                   return;
                 }
-                await onSubmit(exercise.id, proofText.trim());
+                await onSubmit(exercise.id, proofText.trim(), imageUrl || null);
               }}
             >
-              {submitting === exercise.id ? "Saving…" : "Submit + Mark Complete →"}
+              {submitting === exercise.id
+                ? "Saving…"
+                : isApproved
+                ? "Update Submission →"
+                : hasSubmission
+                ? "Re-submit for Review →"
+                : "Submit for Review →"}
             </button>
           </div>
         </div>
@@ -524,17 +653,17 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
 function TabProgramme({
   modules,
   stats,
-  onExerciseComplete,
+  onExerciseSubmit,
   onModuleGate,
   onReload,
   submitting,
 }: {
-  modules:            Module[];
-  stats:              DashboardData["stats"];
-  onExerciseComplete: (exerciseId: string, proofText: string) => Promise<void>;
-  onModuleGate:       (moduleId: string) => Promise<void>;
-  onReload:           () => void;
-  submitting:         string | null;
+  modules:          Module[];
+  stats:            DashboardData["stats"];
+  onExerciseSubmit: (exerciseId: string, proofText: string, proofImageUrl: string | null) => Promise<void>;
+  onModuleGate:     (moduleId: string) => Promise<void>;
+  onReload:         () => void;
+  submitting:       string | null;
 }) {
   if (modules.length === 0) {
     return (
@@ -549,8 +678,9 @@ function TabProgramme({
       <div className="p-greet">
         <h2>30-Day Programme</h2>
         <p>
-          Work through your exercises in order. Each exercise requires a proof response before it can be marked complete.
-          Complete all exercises, pass the module quiz, then submit the gate sign-off to unlock the next module.
+          Work through your exercises in order. Submit a written proof (and optionally a screenshot) for each exercise.
+          Our team reviews each submission — you'll see Approved, Pending Review, or Rejected with feedback.
+          Once all exercises are approved and you've passed the quiz, submit your module gate sign-off.
         </p>
       </div>
 
@@ -599,13 +729,13 @@ function TabProgramme({
                       <ExerciseProofForm
                         key={ex.id}
                         exercise={ex}
-                        onSubmit={onExerciseComplete}
+                        onSubmit={onExerciseSubmit}
                         submitting={submitting}
                       />
                     ))}
 
-                    {/* Quiz section — appears after all exercises done */}
-                    {mod.allExercisesDone && !mod.gateSubmitted && (
+                    {/* Quiz section — appears after all exercises are submitted (pending OK) */}
+                    {mod.allExercisesSubmitted && !mod.gateSubmitted && (
                       <div style={{ marginTop: 16 }}>
                         <QuizPanel
                           moduleId={mod.id}
@@ -614,11 +744,11 @@ function TabProgramme({
                       </div>
                     )}
 
-                    {/* Gate sign-off — only after quiz passed */}
+                    {/* Gate sign-off — only after all exercises approved + quiz passed */}
                     {mod.allExercisesDone && mod.quizPassed && !mod.gateSubmitted && (
                       <div className="p-gate-box" style={{ marginTop: 12 }}>
                         <div>
-                          <div className="p-gate-text">All exercises complete + quiz passed — submit your module sign-off</div>
+                          <div className="p-gate-text">All exercises approved + quiz passed — submit your module sign-off</div>
                           <div className="p-gate-sub">
                             This confirms you have completed {mod.title.split("—")[0]?.trim()}. The next module unlocks on submission.
                           </div>
@@ -697,10 +827,10 @@ function TabProgramme({
 
           <div className="p-card">
             <div className="p-card-title">How It Works</div>
-            <div className="p-ql"><div className="p-ql-dot" />Each exercise requires a proof response</div>
-            <div className="p-ql"><div className="p-ql-dot" />Complete all exercises → module quiz unlocks</div>
-            <div className="p-ql"><div className="p-ql-dot" />Pass quiz (60%+) → gate sign-off unlocks</div>
-            <div className="p-ql"><div className="p-ql-dot" />Submit sign-off → next module unlocks</div>
+            <div className="p-ql"><div className="p-ql-dot" />Submit proof + optional screenshot per exercise</div>
+            <div className="p-ql"><div className="p-ql-dot" />Staff reviews each submission (Approved / Rejected)</div>
+            <div className="p-ql"><div className="p-ql-dot" />All submitted → module quiz unlocks (60%+ to pass)</div>
+            <div className="p-ql"><div className="p-ql-dot" />All approved + quiz passed → gate sign-off unlocks</div>
             <div className="p-ql"><div className="p-ql-dot" />Contact WiBiz support if stuck</div>
           </div>
         </div>
@@ -896,12 +1026,12 @@ export default function ClientPortal() {
     navigate("/login", { replace: true });
   };
 
-  const markExerciseComplete = async (exerciseId: string, proofText: string) => {
+  const submitExerciseProof = async (exerciseId: string, proofText: string, proofImageUrl: string | null) => {
     setSubmitting(exerciseId);
     try {
       await apiFetch(`/progress/exercise/${exerciseId}`, {
         method: "POST",
-        body:   JSON.stringify({ proofText }),
+        body:   JSON.stringify({ proofText, proofImageUrl }),
       });
       await load();
     } finally {
@@ -998,7 +1128,7 @@ export default function ClientPortal() {
           <TabProgramme
             modules={data.modules}
             stats={data.stats}
-            onExerciseComplete={markExerciseComplete}
+            onExerciseSubmit={submitExerciseProof}
             onModuleGate={submitModuleGate}
             onReload={load}
             submitting={submitting}

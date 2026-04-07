@@ -4,7 +4,9 @@ import {
   getUserById,
   listModules,
   listExercisesByModule,
-  getCompletedExerciseIds,
+  getApprovedExerciseIds,
+  getSubmittedExerciseIds,
+  getAllExerciseSubmissions,
   getCompletedModuleIds,
   hasPassedQuiz,
 } from "../db";
@@ -19,27 +21,29 @@ dashboardRouter.get(
     const user = await getUserById(req.user!.userId);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
-    const [allModules, completedExerciseIds, completedModuleIds] = await Promise.all([
+    const uid = req.user!.userId;
+
+    const [allModules, approvedIds, submittedIds, submissions, completedModuleIds] = await Promise.all([
       listModules(true),
-      getCompletedExerciseIds(req.user!.userId),
-      getCompletedModuleIds(req.user!.userId),
+      getApprovedExerciseIds(uid),
+      getSubmittedExerciseIds(uid),
+      getAllExerciseSubmissions(uid),
+      getCompletedModuleIds(uid),
     ]);
 
     // Fetch exercises and quiz pass status for all modules in parallel
     const [exerciseLists, quizPassedFlags] = await Promise.all([
       Promise.all(allModules.map((m) => listExercisesByModule(m.id, true))),
-      Promise.all(allModules.map((m) => hasPassedQuiz(req.user!.userId, m.id))),
+      Promise.all(allModules.map((m) => hasPassedQuiz(uid, m.id))),
     ]);
 
-    // Build enriched module list with status and exercise unlock logic
     let prevGateSubmitted = true; // first module is always available
 
     const modules = allModules.map((m, i) => {
-      const exs          = exerciseLists[i]!;
+      const exs           = exerciseLists[i]!;
       const gateSubmitted = completedModuleIds.has(m.id);
       const quizPassed    = quizPassedFlags[i]!;
 
-      // Determine module status
       let status: "available" | "locked" | "complete";
       if (!prevGateSubmitted) {
         status = "locked";
@@ -49,48 +53,59 @@ dashboardRouter.get(
         status = "available";
       }
 
-      // Exercises: sequential unlock within available/complete modules
       const exercises = exs.map((ex, j) => {
-        const isComplete = completedExerciseIds.has(ex.id);
+        const submission = submissions.get(ex.id) ?? null;
+        const isComplete = approvedIds.has(ex.id);
+
+        // Unlock chain uses submitted IDs — client can progress while awaiting review
         let isUnlocked = false;
         if (status !== "locked") {
           if (j === 0) {
             isUnlocked = true;
           } else {
-            isUnlocked = completedExerciseIds.has(exs[j - 1]!.id);
+            isUnlocked = submittedIds.has(exs[j - 1]!.id);
           }
         }
+
         return {
-          id:          ex.id,
-          title:       ex.title,
-          description: ex.description,
-          proofPrompt: ex.proofPrompt,
-          dayNumber:   ex.dayNumber,
-          orderIndex:  ex.orderIndex,
+          id:               ex.id,
+          title:            ex.title,
+          description:      ex.description,
+          proofPrompt:      ex.proofPrompt,
+          videoUrl:         ex.videoUrl ?? null,
+          dayNumber:        ex.dayNumber,
+          orderIndex:       ex.orderIndex,
           isComplete,
           isUnlocked,
+          submissionStatus: submission?.submissionStatus ?? null,
+          proofText:        submission?.proofText ?? null,
+          proofImageUrl:    submission?.proofImageUrl ?? null,
+          reviewNote:       submission?.reviewNote ?? null,
         };
       });
 
-      const completedCount  = exercises.filter((e) => e.isComplete).length;
-      const allExercisesDone = exs.length > 0 && completedCount === exs.length;
+      const approvedCount         = exercises.filter((e) => e.isComplete).length;
+      const allExercisesDone      = exs.length > 0 && approvedCount === exs.length;
+      // Quiz unlocks when all exercises are submitted (pending OK), not just approved
+      const allExercisesSubmitted = exs.length > 0 && exs.every((e) => submittedIds.has(e.id));
 
       prevGateSubmitted = gateSubmitted;
 
       return {
-        id:                  m.id,
-        title:               m.title,
-        description:         m.description,
-        dayStart:            m.dayStart,
-        dayEnd:              m.dayEnd,
-        orderIndex:          m.orderIndex,
+        id:                   m.id,
+        title:                m.title,
+        description:          m.description,
+        dayStart:             m.dayStart,
+        dayEnd:               m.dayEnd,
+        orderIndex:           m.orderIndex,
         status,
         gateSubmitted,
         allExercisesDone,
+        allExercisesSubmitted,
         quizPassed,
         exercises,
-        completedExercises:  completedCount,
-        totalExercises:      exs.length,
+        completedExercises:   approvedCount,
+        totalExercises:       exs.length,
       };
     });
 
@@ -115,7 +130,7 @@ dashboardRouter.get(
         completedExercises: completedExs,
         completedModules:   completedMods,
         totalModules:       modules.length,
-        progressPct:        totalExercises > 0 ? Math.round((completedExs / totalExercises) * 100) : 0,
+        progressPct: totalExercises > 0 ? Math.round((completedExs / totalExercises) * 100) : 0,
       },
     });
   }

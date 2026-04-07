@@ -59,9 +59,28 @@ interface ExerciseRow {
 interface ExerciseFormValues {
   title:       string;
   description: string;
+  proofPrompt: string;
+  videoUrl:    string;
   dayNumber:   string;
   orderIndex:  string;
   isActive:    boolean;
+}
+
+interface SubmissionRow {
+  id:               string;
+  userId:           string;
+  exerciseId:       string;
+  proofText:        string | null;
+  proofImageUrl:    string | null;
+  submissionStatus: "pending_review" | "approved" | "rejected";
+  submittedAt:      string | null;
+  reviewedAt:       string | null;
+  reviewNote:       string | null;
+  userEmail:        string;
+  userFirstName:    string | null;
+  userLastName:     string | null;
+  exerciseTitle:    string;
+  exerciseDayNum:   number | null;
 }
 
 interface ModuleFormValues {
@@ -73,10 +92,10 @@ interface ModuleFormValues {
   isActive:    boolean;
 }
 
-type Tab = "users" | "sync" | "webhooks" | "modules";
+type Tab = "users" | "sync" | "webhooks" | "modules" | "submissions";
 
 const emptyExForm = (): ExerciseFormValues => ({
-  title: "", description: "", dayNumber: "", orderIndex: "0", isActive: true,
+  title: "", description: "", proofPrompt: "", videoUrl: "", dayNumber: "", orderIndex: "0", isActive: true,
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -274,7 +293,7 @@ function ExercisePanel({ moduleId, onClose }: { moduleId: string; onClose: () =>
   const openCreate = () => { setEditTarget(null); setForm(emptyExForm()); setFormErr(""); setShowForm(true); };
   const openEdit   = (ex: ExerciseRow) => {
     setEditTarget(ex);
-    setForm({ title: ex.title, description: ex.description ?? "", dayNumber: ex.dayNumber?.toString() ?? "", orderIndex: ex.orderIndex.toString(), isActive: ex.isActive });
+    setForm({ title: ex.title, description: ex.description ?? "", proofPrompt: (ex as any).proofPrompt ?? "", videoUrl: (ex as any).videoUrl ?? "", dayNumber: ex.dayNumber?.toString() ?? "", orderIndex: ex.orderIndex.toString(), isActive: ex.isActive });
     setFormErr("");
     setShowForm(true);
   };
@@ -287,6 +306,8 @@ function ExercisePanel({ moduleId, onClose }: { moduleId: string; onClose: () =>
       const body = {
         title:       form.title.trim(),
         description: form.description.trim() || null,
+        proofPrompt: form.proofPrompt.trim() || null,
+        videoUrl:    form.videoUrl.trim() || null,
         dayNumber:   form.dayNumber ? parseInt(form.dayNumber) : null,
         orderIndex:  parseInt(form.orderIndex) || 0,
         isActive:    form.isActive,
@@ -356,6 +377,18 @@ function ExercisePanel({ moduleId, onClose }: { moduleId: string; onClose: () =>
                 placeholder="Optional description shown to clients"
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-foreground mb-1">Proof Prompt</label>
+              <input type="text" value={form.proofPrompt} onChange={(e) => setForm((f) => ({...f, proofPrompt: e.target.value}))}
+                placeholder="e.g. Upload a screenshot showing your dashboard is set up correctly"
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-foreground mb-1">Video URL (YouTube / Loom / Vimeo)</label>
+              <input type="url" value={form.videoUrl} onChange={(e) => setForm((f) => ({...f, videoUrl: e.target.value}))}
+                placeholder="https://www.loom.com/share/..."
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
             <div className="col-span-2 flex items-center gap-2">
               <input type="checkbox" id="ex-active" checked={form.isActive} onChange={(e) => setForm((f) => ({...f, isActive: e.target.checked}))} className="w-4 h-4 accent-primary" />
               <label htmlFor="ex-active" className="text-sm text-foreground">Active (visible to clients)</label>
@@ -404,6 +437,169 @@ function ExercisePanel({ moduleId, onClose }: { moduleId: string; onClose: () =>
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+
+// ─── Submissions review panel ─────────────────────────────────────────────────
+function TabSubmissions() {
+  const [rows,       setRows]       = useState<SubmissionRow[]>([]);
+  const [filter,     setFilter]     = useState<"pending_review" | "approved" | "rejected" | "all">("pending_review");
+  const [loading,    setLoading]    = useState(true);
+  const [expanded,   setExpanded]   = useState<string | null>(null);
+  const [reviewing,  setReviewing]  = useState<string | null>(null);
+  const [noteMap,    setNoteMap]    = useState<Record<string, string>>({});
+
+  const load = async (f: typeof filter) => {
+    setLoading(true);
+    try {
+      const qs = f === "all" ? "" : `?status=${f}`;
+      const data = await apiFetch<{ submissions: SubmissionRow[] }>(`/admin/submissions${qs}`);
+      setRows(data.submissions);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(filter); }, [filter]);
+
+  const review = async (id: string, status: "approved" | "rejected") => {
+    setReviewing(id);
+    try {
+      await apiFetch(`/admin/submissions/${id}/review`, {
+        method: "PUT",
+        body: JSON.stringify({ status, note: noteMap[id] ?? null }),
+      });
+      await load(filter);
+      setExpanded(null);
+    } finally {
+      setReviewing(null);
+    }
+  };
+
+  const statusBadge = (s: SubmissionRow["submissionStatus"]) => {
+    if (s === "approved") return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-900/40 text-green-400 border border-green-800/50">Approved</span>;
+    if (s === "pending_review") return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-yellow-900/40 text-yellow-400 border border-yellow-800/50">Pending Review</span>;
+    return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-900/40 text-red-400 border border-red-800/50">Rejected</span>;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <p className="text-sm text-muted-foreground flex-1">
+          Review client exercise submissions. Approve or reject with feedback.
+        </p>
+        <div className="flex gap-1">
+          {(["pending_review", "approved", "rejected", "all"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${filter === f ? "border-primary text-primary bg-primary/10" : "border-border text-muted-foreground hover:bg-muted/40"}`}
+            >
+              {f === "pending_review" ? "Pending" : f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground py-4">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">No submissions match this filter.</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((row) => {
+            const name = [row.userFirstName, row.userLastName].filter(Boolean).join(" ") || row.userEmail;
+            const isOpen = expanded === row.id;
+            return (
+              <div key={row.id} className="border border-border rounded-xl overflow-hidden">
+                {/* Summary row */}
+                <div
+                  className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-muted/20"
+                  onClick={() => setExpanded(isOpen ? null : row.id)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">{name}</div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {row.exerciseDayNum ? `Day ${row.exerciseDayNum} — ` : ""}{row.exerciseTitle}
+                    </div>
+                  </div>
+                  {statusBadge(row.submissionStatus)}
+                  <div className="text-xs text-muted-foreground whitespace-nowrap">
+                    {row.submittedAt ? new Date(row.submittedAt).toLocaleDateString() : "—"}
+                  </div>
+                  <span className="text-muted-foreground text-sm">{isOpen ? "▲" : "▼"}</span>
+                </div>
+
+                {/* Expanded detail */}
+                {isOpen && (
+                  <div className="px-4 pb-4 pt-1 border-t border-border space-y-3 bg-muted/10">
+                    {/* Proof text */}
+                    {row.proofText && (
+                      <div>
+                        <div className="text-xs font-medium text-muted-foreground mb-1">Written proof</div>
+                        <div className="text-sm text-foreground bg-background border border-border rounded-lg px-3 py-2 whitespace-pre-wrap">{row.proofText}</div>
+                      </div>
+                    )}
+
+                    {/* Screenshot */}
+                    {row.proofImageUrl && (
+                      <div>
+                        <div className="text-xs font-medium text-muted-foreground mb-1">Screenshot</div>
+                        <a href={row.proofImageUrl} target="_blank" rel="noopener noreferrer">
+                          <img
+                            src={row.proofImageUrl}
+                            alt="Proof screenshot"
+                            className="max-h-48 rounded-lg border border-border object-contain cursor-pointer hover:opacity-90"
+                          />
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Existing review note */}
+                    {row.reviewNote && (
+                      <div>
+                        <div className="text-xs font-medium text-muted-foreground mb-1">Previous feedback</div>
+                        <div className="text-xs text-foreground bg-background border border-border rounded-lg px-3 py-2">{row.reviewNote}</div>
+                      </div>
+                    )}
+
+                    {/* Review note input */}
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">Feedback / note to client (optional)</label>
+                      <textarea
+                        rows={2}
+                        value={noteMap[row.id] ?? ""}
+                        onChange={(e) => setNoteMap((m) => ({ ...m, [row.id]: e.target.value }))}
+                        placeholder="e.g. Please re-upload a clearer screenshot showing the campaign is active."
+                        className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                      />
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        disabled={reviewing === row.id}
+                        onClick={() => review(row.id, "rejected")}
+                        className="px-4 py-1.5 text-sm font-medium border border-destructive/50 text-destructive rounded-lg hover:bg-destructive/10 disabled:opacity-50"
+                      >
+                        {reviewing === row.id ? "…" : "Reject"}
+                      </button>
+                      <button
+                        disabled={reviewing === row.id}
+                        onClick={() => review(row.id, "approved")}
+                        className="px-4 py-1.5 text-sm font-medium bg-green-700 text-white rounded-lg hover:bg-green-600 disabled:opacity-50"
+                      >
+                        {reviewing === row.id ? "…" : "Approve"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -506,10 +702,11 @@ export default function AdminPage() {
   }
 
   const tabLabels: Record<Tab, string> = {
-    users:    `Users (${users.length})`,
-    sync:     "Sync Events",
-    webhooks: "Webhook Log",
-    modules:  `Modules (${modules.length})`,
+    users:       `Users (${users.length})`,
+    modules:     `Modules (${modules.length})`,
+    submissions: "Submissions",
+    sync:        "Sync Events",
+    webhooks:    "Webhook Log",
   };
 
   return (
@@ -554,7 +751,7 @@ export default function AdminPage() {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Tabs */}
         <div className="flex gap-1 border-b border-border">
-          {(["users", "modules", "sync", "webhooks"] as Tab[]).map((t) => (
+          {(["users", "modules", "submissions", "sync", "webhooks"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -706,6 +903,9 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* ── Submissions ── */}
+        {tab === "submissions" && <TabSubmissions />}
 
         {/* ── Sync Events ── */}
         {tab === "sync" && (

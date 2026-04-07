@@ -156,7 +156,21 @@ export async function deleteExercise(id: string) {
 }
 
 // ─── Progress queries ─────────────────────────────────────────────────────────
-export async function getCompletedExerciseIds(userId: string): Promise<Set<string>> {
+
+// Returns exercise IDs with APPROVED status — used for progress counting + module gate
+export async function getApprovedExerciseIds(userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ exerciseId: schema.userProgress.exerciseId })
+    .from(schema.userProgress)
+    .where(and(
+      eq(schema.userProgress.userId, userId),
+      eq(schema.userProgress.submissionStatus, "approved"),
+    ));
+  return new Set(rows.map((r) => r.exerciseId));
+}
+
+// Returns exercise IDs with ANY submission — used for sequential unlock chain
+export async function getSubmittedExerciseIds(userId: string): Promise<Set<string>> {
   const rows = await db
     .select({ exerciseId: schema.userProgress.exerciseId })
     .from(schema.userProgress)
@@ -164,13 +178,48 @@ export async function getCompletedExerciseIds(userId: string): Promise<Set<strin
   return new Set(rows.map((r) => r.exerciseId));
 }
 
-export async function markExerciseComplete(userId: string, exerciseId: string, proofText: string) {
-  const existing = await db
+// Returns all submission rows for a user keyed by exerciseId
+export async function getAllExerciseSubmissions(userId: string) {
+  const rows = await db
     .select()
     .from(schema.userProgress)
+    .where(eq(schema.userProgress.userId, userId));
+  return new Map(rows.map((r) => [r.exerciseId, r]));
+}
+
+// Submit or re-submit proof — upserts the single row per (user, exercise)
+export async function submitExerciseProof(
+  userId:       string,
+  exerciseId:   string,
+  proofText:    string,
+  proofImageUrl: string | null = null,
+) {
+  const [existing] = await db
+    .select({ id: schema.userProgress.id })
+    .from(schema.userProgress)
     .where(and(eq(schema.userProgress.userId, userId), eq(schema.userProgress.exerciseId, exerciseId)));
-  if (existing.length > 0) return existing[0]!;
-  const [row] = await db.insert(schema.userProgress).values({ userId, exerciseId, proofText }).returning();
+
+  if (existing) {
+    const [row] = await db
+      .update(schema.userProgress)
+      .set({
+        proofText,
+        proofImageUrl,
+        submissionStatus: "pending_review",
+        submittedAt:      new Date(),
+        reviewedAt:       null,
+        reviewedBy:       null,
+        reviewNote:       null,
+      })
+      .where(eq(schema.userProgress.id, existing.id))
+      .returning();
+    return row!;
+  }
+
+  const [row] = await db
+    .insert(schema.userProgress)
+    .values({ userId, exerciseId, proofText, proofImageUrl, submissionStatus: "pending_review" })
+    .returning();
   return row!;
 }
 
@@ -190,6 +239,61 @@ export async function markModuleComplete(userId: string, moduleId: string) {
   if (existing.length > 0) return existing[0]!;
   const [row] = await db.insert(schema.userModuleCompletions).values({ userId, moduleId }).returning();
   return row!;
+}
+
+// ─── Submission review (admin) ────────────────────────────────────────────────
+
+export async function listSubmissionsForReview(
+  status?: "pending_review" | "approved" | "rejected",
+  limit = 100,
+) {
+  const condition = status
+    ? eq(schema.userProgress.submissionStatus, status)
+    : undefined;
+
+  return db
+    .select({
+      id:               schema.userProgress.id,
+      userId:           schema.userProgress.userId,
+      exerciseId:       schema.userProgress.exerciseId,
+      proofText:        schema.userProgress.proofText,
+      proofImageUrl:    schema.userProgress.proofImageUrl,
+      submissionStatus: schema.userProgress.submissionStatus,
+      submittedAt:      schema.userProgress.submittedAt,
+      reviewedAt:       schema.userProgress.reviewedAt,
+      reviewNote:       schema.userProgress.reviewNote,
+      userEmail:        schema.users.email,
+      userFirstName:    schema.users.firstName,
+      userLastName:     schema.users.lastName,
+      exerciseTitle:    schema.exercises.title,
+      exerciseDayNum:   schema.exercises.dayNumber,
+      moduleId:         schema.exercises.moduleId,
+    })
+    .from(schema.userProgress)
+    .innerJoin(schema.users,     eq(schema.userProgress.userId,     schema.users.id))
+    .innerJoin(schema.exercises, eq(schema.userProgress.exerciseId, schema.exercises.id))
+    .where(condition)
+    .orderBy(desc(schema.userProgress.submittedAt))
+    .limit(limit);
+}
+
+export async function reviewSubmission(
+  id:         string,
+  reviewerId: string,
+  status:     "approved" | "rejected",
+  note:       string | null = null,
+) {
+  const [row] = await db
+    .update(schema.userProgress)
+    .set({
+      submissionStatus: status,
+      reviewedAt:       new Date(),
+      reviewedBy:       reviewerId,
+      reviewNote:       note,
+    })
+    .where(eq(schema.userProgress.id, id))
+    .returning();
+  return row ?? null;
 }
 
 // ─── Quiz queries ─────────────────────────────────────────────────────────────
@@ -255,15 +359,6 @@ export async function saveQuizResponse(
     })
     .returning();
   return row!;
-}
-
-// Fetch completed exercise IDs including proof text
-export async function getExerciseProgress(userId: string): Promise<Map<string, string | null>> {
-  const rows = await db
-    .select({ exerciseId: schema.userProgress.exerciseId, proofText: schema.userProgress.proofText })
-    .from(schema.userProgress)
-    .where(eq(schema.userProgress.userId, userId));
-  return new Map(rows.map((r) => [r.exerciseId, r.proofText ?? null]));
 }
 
 // ─── Webhook log ───────────────────────────────────────────────────────────────

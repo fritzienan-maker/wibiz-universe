@@ -15,6 +15,8 @@ import {
   createExercise,
   updateExercise,
   deleteExercise,
+  listSubmissionsForReview,
+  reviewSubmission,
 } from "../db";
 
 export const adminRouter = Router();
@@ -117,6 +119,8 @@ adminRouter.delete(
 const exerciseSchema = z.object({
   title:       z.string().min(1).max(255),
   description: z.string().optional().nullable(),
+  proofPrompt: z.string().optional().nullable(),
+  videoUrl:    z.string().url().optional().nullable().or(z.literal("")),
   dayNumber:   z.number().int().positive().optional().nullable(),
   orderIndex:  z.number().int().min(0).default(0),
   isActive:    z.boolean().default(true),
@@ -164,4 +168,37 @@ adminRouter.delete("/exercises/:id", async (req, res): Promise<void> => {
   if (!ex) { res.status(404).json({ error: "Exercise not found" }); return; }
   await deleteExercise(req.params.id!);
   res.json({ message: "deleted" });
+});
+
+// ─── Submission review ────────────────────────────────────────────────────────
+
+// GET /api/admin/submissions?status=pending_review|approved|rejected
+adminRouter.get("/submissions", async (req, res): Promise<void> => {
+  const status = req.query.status as "pending_review" | "approved" | "rejected" | undefined;
+  const valid  = ["pending_review", "approved", "rejected"];
+  const filter = status && valid.includes(status) ? status : undefined;
+  const rows   = await listSubmissionsForReview(filter);
+  res.json({ submissions: rows });
+});
+
+// PUT /api/admin/submissions/:id/review — approve or reject with optional note
+const reviewSchema = z.object({
+  status: z.enum(["approved", "rejected"]),
+  note:   z.string().max(1000).optional().nullable(),
+});
+
+adminRouter.put("/submissions/:id/review", async (req, res): Promise<void> => {
+  const parsed = reviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
+    return;
+  }
+  const updated = await reviewSubmission(
+    req.params.id!,
+    req.user!.userId,
+    parsed.data.status,
+    parsed.data.note ?? null,
+  );
+  if (!updated) { res.status(404).json({ error: "Submission not found" }); return; }
+  res.json({ submission: updated });
 });

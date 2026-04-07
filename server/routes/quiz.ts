@@ -6,7 +6,7 @@ import {
   listQuizQuestionsWithAnswers,
   getLatestQuizResponse,
   saveQuizResponse,
-  getCompletedExerciseIds,
+  getSubmittedExerciseIds,
   listExercisesByModule,
 } from "../db";
 
@@ -29,7 +29,7 @@ quizRouter.get(
 
     // Quiz only available once all exercises in the module are complete
     const exercises    = await listExercisesByModule(moduleId, true);
-    const completedIds = await getCompletedExerciseIds(userId);
+    const completedIds = await getSubmittedExerciseIds(userId);
     const allDone      = exercises.length > 0 && exercises.every((e) => completedIds.has(e.id));
     if (!allDone) {
       res.status(400).json({ error: "quiz_locked", message: "Complete all exercises in this module to unlock the quiz." });
@@ -76,7 +76,7 @@ quizRouter.post(
 
     // Exercises must all be complete before quiz can be submitted
     const exercises    = await listExercisesByModule(moduleId, true);
-    const completedIds = await getCompletedExerciseIds(userId);
+    const completedIds = await getSubmittedExerciseIds(userId);
     const allDone      = exercises.length > 0 && exercises.every((e) => completedIds.has(e.id));
     if (!allDone) {
       res.status(400).json({ error: "quiz_locked", message: "Complete all exercises before taking the quiz." });
