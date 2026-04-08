@@ -93,7 +93,7 @@ interface ModuleFormValues {
   isActive:    boolean;
 }
 
-type Tab = "users" | "sync" | "webhooks" | "modules" | "submissions";
+type Tab = "users" | "sync" | "webhooks" | "modules" | "submissions" | "provision";
 
 const emptyExForm = (): ExerciseFormValues => ({
   title: "", description: "", proofPrompt: "", videoUrl: "", dayNumber: "", orderIndex: "0", isActive: true,
@@ -709,6 +709,7 @@ export default function AdminPage() {
     submissions: "Submissions",
     sync:        "Sync Events",
     webhooks:    "Webhook Log",
+    provision:   "Provision Client",
   };
 
   return (
@@ -758,7 +759,7 @@ export default function AdminPage() {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Tabs */}
         <div className="flex gap-1 border-b border-border">
-          {(["users", "modules", "submissions", "sync", "webhooks"] as Tab[]).map((t) => (
+          {(["users", "modules", "submissions", "sync", "webhooks", "provision"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -972,7 +973,162 @@ export default function AdminPage() {
             </table>
           </div>
         )}
+
+        {/* ── Provision Client ── */}
+        {tab === "provision" && <ProvisionOverride />}
       </main>
+    </div>
+  );
+}
+
+// ─── Provision Override panel ──────────────────────────────────────────────────
+function ProvisionOverride() {
+  const [email,     setEmail]     = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName,  setLastName]  = useState("");
+  const [planTier,  setPlanTier]  = useState<"" | "lite" | "standard" | "pro">("");
+  const [saving,    setSaving]    = useState(false);
+  const [result,    setResult]    = useState<{
+    action: "created" | "re-provisioned";
+    email: string;
+    tempPassword: string;
+    userId: string;
+    note: string;
+  } | null>(null);
+  const [err,       setErr]       = useState("");
+
+  const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary";
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(""); setResult(null);
+    if (!email.trim()) { setErr("Email is required."); return; }
+    setSaving(true);
+    try {
+      const res = await apiFetch<{
+        action: "created" | "re-provisioned";
+        email: string;
+        tempPassword: string;
+        userId: string;
+        note: string;
+      }>("/admin/provision-override", {
+        method: "POST",
+        body: JSON.stringify({
+          email:     email.trim(),
+          firstName: firstName.trim() || null,
+          lastName:  lastName.trim() || null,
+          planTier:  planTier || null,
+        }),
+      });
+      setResult(res);
+      setEmail(""); setFirstName(""); setLastName(""); setPlanTier("");
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Provision failed. Check the email and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="max-w-xl space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-foreground mb-1">Provision Client Access Override</h2>
+        <p className="text-sm text-muted-foreground">
+          Use this for clients who paid before this platform existed. Creates or re-activates a client account
+          and generates a temporary password. The admin must share the password directly with the client.
+        </p>
+      </div>
+
+      {result && (
+        <div className="rounded-lg border border-green-700/40 bg-green-900/10 p-4 space-y-3">
+          <div className="flex items-center gap-2 text-green-400 font-semibold text-sm">
+            ✓ {result.action === "created" ? "Account created" : "Account re-provisioned"}
+          </div>
+          <div className="text-sm text-muted-foreground">{result.note}</div>
+          <div className="rounded-lg border border-border bg-background p-3 space-y-2 text-sm">
+            <div><span className="text-muted-foreground">Email:</span> <span className="font-mono">{result.email}</span></div>
+            <div className="flex items-center gap-3">
+              <span className="text-muted-foreground">Temp password:</span>
+              <span className="font-mono bg-muted px-2 py-0.5 rounded text-foreground">{result.tempPassword}</span>
+              <button
+                className="text-xs text-primary underline"
+                onClick={() => navigator.clipboard.writeText(result.tempPassword)}
+              >
+                Copy
+              </button>
+            </div>
+            <div className="text-xs text-muted-foreground pt-1">
+              Share this password securely with the client. They can change it after first login via My Account → Change Password.
+            </div>
+          </div>
+          <button
+            className="text-xs text-muted-foreground underline"
+            onClick={() => setResult(null)}
+          >
+            Provision another client
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
+            Email address <span className="text-destructive">*</span>
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="client@example.com"
+            required
+            className={inputCls}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">First name (optional)</label>
+            <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Last name (optional)</label>
+            <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last" className={inputCls} />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Plan tier (optional)</label>
+          <select
+            value={planTier}
+            onChange={(e) => setPlanTier(e.target.value as "" | "lite" | "standard" | "pro")}
+            className={inputCls}
+          >
+            <option value="">No plan assigned</option>
+            <option value="lite">Lite</option>
+            <option value="standard">Standard</option>
+            <option value="pro">Pro</option>
+          </select>
+        </div>
+
+        <div className="rounded-lg border border-yellow-700/30 bg-yellow-900/10 p-3 text-xs text-yellow-400 space-y-1">
+          <div className="font-semibold">Before provisioning:</div>
+          <div>• If the client has a GHL contact, use the normal GHL webhook instead.</div>
+          <div>• If the account already exists, their previous data (progress, submissions) is preserved.</div>
+          <div>• The temporary password is only shown once — copy it immediately.</div>
+        </div>
+
+        {err && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {err}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={saving}
+          className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+        >
+          {saving ? "Provisioning…" : "Provision Access →"}
+        </button>
+      </form>
     </div>
   );
 }

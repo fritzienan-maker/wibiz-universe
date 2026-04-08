@@ -23,7 +23,9 @@ export const ENV = {
   docusealApiToken:   process.env.DOCUSEAL_API_TOKEN ?? "",
   docusealSignerRole: process.env.DOCUSEAL_SIGNER_ROLE ?? "First Party",
   // GHL — staff invite URL custom field ID (optional; set to write invite link to GHL contact)
-  ghlStaffInviteFieldId: process.env.GHL_STAFF_INVITE_FIELD_ID ?? "",
+  ghlStaffInviteFieldId:   process.env.GHL_STAFF_INVITE_FIELD_ID ?? "",
+  // GHL — inbound webhook URL for support tickets (optional; set to forward tickets to GHL)
+  ghlSupportWebhookUrl:    process.env.GHL_SUPPORT_WEBHOOK_URL ?? "",
 };
 
 // Startup validation — warns loudly but does not crash (BC360 pattern).

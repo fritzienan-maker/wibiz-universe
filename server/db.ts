@@ -505,6 +505,74 @@ export async function deactivateStaffMember(staffId: string, clientAdminId: stri
     ));
 }
 
+// ─── Profile update ────────────────────────────────────────────────────────────
+export async function updateUserProfile(
+  id: string,
+  data: { firstName?: string | null; lastName?: string | null; avatarUrl?: string | null },
+) {
+  const [user] = await db
+    .update(schema.users)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.users.id, id))
+    .returning();
+  return user ?? null;
+}
+
+// ─── Re-provision user (admin override) ───────────────────────────────────────
+export async function activateExistingUser(id: string, passwordHash: string) {
+  const [user] = await db
+    .update(schema.users)
+    .set({
+      passwordHash,
+      isActive:    true,
+      activatedAt: new Date(),
+      updatedAt:   new Date(),
+    })
+    .where(eq(schema.users.id, id))
+    .returning();
+  return user ?? null;
+}
+
+// ─── Support tickets ───────────────────────────────────────────────────────────
+export async function createSupportTicket(data: {
+  userId:        string;
+  subject:       string;
+  category:      string | null;
+  message:       string;
+  priority:      string;
+  attachmentUrl: string | null;
+  ghlForwarded:  boolean;
+}) {
+  const [row] = await db
+    .insert(schema.supportTickets)
+    .values({ ...data, status: "open" })
+    .returning();
+  return row!;
+}
+
+export async function listSupportTickets(limit = 100) {
+  return db
+    .select({
+      id:            schema.supportTickets.id,
+      userId:        schema.supportTickets.userId,
+      subject:       schema.supportTickets.subject,
+      category:      schema.supportTickets.category,
+      message:       schema.supportTickets.message,
+      priority:      schema.supportTickets.priority,
+      attachmentUrl: schema.supportTickets.attachmentUrl,
+      status:        schema.supportTickets.status,
+      ghlForwarded:  schema.supportTickets.ghlForwarded,
+      createdAt:     schema.supportTickets.createdAt,
+      userEmail:     schema.users.email,
+      userFirstName: schema.users.firstName,
+      userLastName:  schema.users.lastName,
+    })
+    .from(schema.supportTickets)
+    .innerJoin(schema.users, eq(schema.supportTickets.userId, schema.users.id))
+    .orderBy(desc(schema.supportTickets.createdAt))
+    .limit(limit);
+}
+
 // ─── Webhook log ───────────────────────────────────────────────────────────────
 export async function logWebhookReceived(rawPayload: unknown) {
   const [log] = await db

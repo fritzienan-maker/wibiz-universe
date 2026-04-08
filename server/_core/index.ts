@@ -11,6 +11,7 @@ import { adminRouter }     from "../routes/admin";
 import { progressRouter }  from "../routes/progress";
 import { quizRouter }      from "../routes/quiz";
 import { teamRouter, inviteRouter } from "../routes/team";
+import { supportRouter } from "../routes/support";
 import { setupVite, serveStatic } from "./vite";
 
 validateEnv();
@@ -47,6 +48,7 @@ app.use("/api/admin",        adminRouter);
 app.use("/api/progress",     progressRouter);
 app.use("/api/quiz",         quizRouter);
 app.use("/api/team",         teamRouter);
+app.use("/api/support",      supportRouter);
 
 // ─── Frontend (Vite dev middleware or static build) ───────────────────────────
 async function startServer(): Promise<void> {

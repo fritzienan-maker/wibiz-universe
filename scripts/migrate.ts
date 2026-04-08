@@ -121,6 +121,27 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
       created_at     TIMESTAMP    DEFAULT NOW()
     )`,
   },
+  // ── User avatar + Support Tickets (2026-04) ───────────────────────────────
+  {
+    name: "0012_users_avatar_url",
+    sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`,
+  },
+  {
+    name: "0013_support_tickets",
+    sql: `CREATE TABLE IF NOT EXISTS support_tickets (
+      id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id        UUID         NOT NULL,
+      subject        VARCHAR(255) NOT NULL,
+      category       VARCHAR(100),
+      message        TEXT         NOT NULL,
+      priority       VARCHAR(20)  NOT NULL DEFAULT 'normal',
+      attachment_url TEXT,
+      status         VARCHAR(20)  NOT NULL DEFAULT 'open',
+      ghl_forwarded  BOOLEAN      NOT NULL DEFAULT FALSE,
+      created_at     TIMESTAMP    DEFAULT NOW(),
+      updated_at     TIMESTAMP    DEFAULT NOW()
+    )`,
+  },
 ];
 
 async function run(): Promise<void> {

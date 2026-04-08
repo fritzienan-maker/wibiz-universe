@@ -51,6 +51,7 @@ export const users = pgTable("users", {
   lastLoginAt:      timestamp("last_login_at"),
   createdAt:        timestamp("created_at").defaultNow(),
   updatedAt:        timestamp("updated_at").defaultNow(),
+  avatarUrl:        text("avatar_url"),
   // Staff / team fields
   clientId:         uuid("client_id"),            // set for client_staff; null for client_admin
   inviteToken:      varchar("invite_token", { length: 64 }),
@@ -172,6 +173,21 @@ export const quizResponses = pgTable("quiz_responses", {
   passed:         boolean("passed").notNull().default(false),
   passedAt:       timestamp("passed_at"),
   createdAt:      timestamp("created_at").defaultNow(),
+});
+
+// ─── Support Tickets ──────────────────────────────────────────────────────────
+export const supportTickets = pgTable("support_tickets", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  userId:        uuid("user_id").notNull(),
+  subject:       varchar("subject", { length: 255 }).notNull(),
+  category:      varchar("category", { length: 100 }),
+  message:       text("message").notNull(),
+  priority:      varchar("priority", { length: 20 }).notNull().default("normal"),
+  attachmentUrl: text("attachment_url"),
+  status:        varchar("status", { length: 20 }).notNull().default("open"),
+  ghlForwarded:  boolean("ghl_forwarded").notNull().default(false),
+  createdAt:     timestamp("created_at").defaultNow(),
+  updatedAt:     timestamp("updated_at").defaultNow(),
 });
 
 // ─── Inferred types ───────────────────────────────────────────────────────────

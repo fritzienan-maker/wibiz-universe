@@ -47,6 +47,7 @@ interface DashboardData {
     planTier:     string | null;
     vertical:     string | null;
     hskdRequired: boolean | null;
+    avatarUrl:    string | null;
   };
   modules: Module[];
   stats: {
@@ -71,7 +72,7 @@ interface QuizState {
   lastAttempt: { score: number; totalQuestions: number; passed: boolean; passedAt: string | null } | null;
 }
 
-type Tab = "dashboard" | "programme" | "team" | "resources";
+type Tab = "dashboard" | "programme" | "team" | "resources" | "support" | "account";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function initials(first: string | null, last: string | null, email: string) {
@@ -1104,18 +1105,515 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
   );
 }
 
+// ─── Support tab ──────────────────────────────────────────────────────────────
+const SUPPORT_CATEGORIES = [
+  "General question",
+  "Technical issue",
+  "Billing / account",
+  "Programme / exercises",
+  "Platform access",
+  "Other",
+];
+
+function TabSupport({ user }: { user: DashboardData["user"] }) {
+  const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "";
+  const [subject,       setSubject]       = useState("");
+  const [category,      setCategory]      = useState("");
+  const [message,       setMessage]       = useState("");
+  const [priority,      setPriority]      = useState<"low" | "normal" | "high">("normal");
+  const [attachUrl,     setAttachUrl]     = useState("");
+  const [uploading,     setUploading]     = useState(false);
+  const [uploadErr,     setUploadErr]     = useState("");
+  const [submitting,    setSubmitting]    = useState(false);
+  const [submitErr,     setSubmitErr]     = useState("");
+  const [submitted,     setSubmitted]     = useState(false);
+
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setUploadErr("File must be under 5 MB."); return; }
+    const allowed = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+    if (!allowed.includes(file.type)) { setUploadErr("Images only (PNG, JPG, GIF, WEBP)."); return; }
+    setUploadErr("");
+    setUploading(true);
+    try {
+      const url = await uploadToCloudinary(file);
+      setAttachUrl(url);
+    } catch {
+      setUploadErr("Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitErr("");
+    if (!subject.trim()) { setSubmitErr("Please enter a subject."); return; }
+    if (!message.trim()) { setSubmitErr("Please describe your issue."); return; }
+    setSubmitting(true);
+    try {
+      await apiFetch("/support/ticket", {
+        method: "POST",
+        body: JSON.stringify({
+          subject:       subject.trim(),
+          category:      category || null,
+          message:       message.trim(),
+          priority,
+          attachmentUrl: attachUrl || null,
+        }),
+      });
+      setSubmitted(true);
+    } catch (err) {
+      setSubmitErr(err instanceof ApiError ? err.message : "Failed to submit. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reset = () => {
+    setSubject(""); setCategory(""); setMessage(""); setPriority("normal");
+    setAttachUrl(""); setUploadErr(""); setSubmitErr(""); setSubmitted(false);
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)",
+    borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)",
+    fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box",
+  };
+
+  return (
+    <>
+      <div className="p-greet">
+        <h2>Get Support</h2>
+        <p>Submit a support request and our team will get back to you. You can also browse our support articles for instant answers.</p>
+      </div>
+
+      <div className="p-two-col">
+        <div>
+          {/* Ticket form */}
+          <div className="p-card">
+            <div className="p-card-title">Submit a Support Ticket</div>
+            <div style={{ fontSize: 12, color: "var(--ts)", marginBottom: 16 }}>
+              Describe your issue below. Our team reviews tickets and responds by email.
+            </div>
+
+            {submitted ? (
+              <div style={{ background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "20px 16px", textAlign: "center" }}>
+                <div style={{ fontSize: 22, marginBottom: 8 }}>✓</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--g-t)", marginBottom: 6 }}>Ticket submitted successfully</div>
+                <div style={{ fontSize: 12, color: "var(--ts)", marginBottom: 16 }}>
+                  We will respond to <strong>{user.email}</strong> as soon as possible.
+                </div>
+                <button className="p-btn p-btn-blue" style={{ fontSize: 12 }} onClick={reset}>
+                  Submit another ticket
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit}>
+                {/* Pre-filled user info (read-only) */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Your name</label>
+                    <input type="text" value={displayName} readOnly style={{ ...inputStyle, opacity: 0.6, cursor: "default" }} />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Email</label>
+                    <input type="email" value={user.email} readOnly style={{ ...inputStyle, opacity: 0.6, cursor: "default" }} />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
+                    Subject <span style={{ color: "var(--r-t)" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Brief description of your issue"
+                    required
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Category</label>
+                    <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
+                      <option value="">Select a category…</option>
+                      {SUPPORT_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Priority</label>
+                    <select value={priority} onChange={(e) => setPriority(e.target.value as "low" | "normal" | "high")} style={inputStyle}>
+                      <option value="low">Low</option>
+                      <option value="normal">Normal</option>
+                      <option value="high">High — urgent issue</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
+                    Message <span style={{ color: "var(--r-t)" }}>*</span>
+                  </label>
+                  <textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Describe your issue in detail. Include any error messages or steps to reproduce."
+                    rows={5}
+                    required
+                    style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
+                  />
+                </div>
+
+                {cloudName && (
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
+                      Screenshot (optional)
+                    </label>
+                    {attachUrl ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <img src={attachUrl} alt="Attachment preview" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 6, border: "1px solid var(--bdr)" }} />
+                        <div>
+                          <div style={{ fontSize: 11, color: "var(--g-t)", marginBottom: 4 }}>Uploaded</div>
+                          <button type="button" style={{ fontSize: 11, color: "var(--ts)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }} onClick={() => setAttachUrl("")}>
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={uploading}
+                        onChange={handleFileChange}
+                        style={{ fontSize: 12, color: "var(--ts)" }}
+                      />
+                    )}
+                    {uploading && <div style={{ fontSize: 11, color: "var(--ts)", marginTop: 4 }}>Uploading…</div>}
+                    {uploadErr && <div style={{ fontSize: 11, color: "var(--r-t)", marginTop: 4 }}>{uploadErr}</div>}
+                  </div>
+                )}
+
+                {submitErr && (
+                  <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>
+                    {submitErr}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button type="submit" className="p-btn p-btn-blue" disabled={submitting || uploading}>
+                    {submitting ? "Submitting…" : "Submit Ticket →"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+
+        <div>
+          {/* Support articles */}
+          <div className="p-card">
+            <div className="p-card-title">Support Articles</div>
+            <div style={{ fontSize: 12, color: "var(--ts)", marginBottom: 14 }}>
+              Browse our knowledge base for instant answers to common questions.
+            </div>
+            <a
+              href="https://start.wibiz.ai/support/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "block", textDecoration: "none" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "12px 14px", cursor: "pointer", marginBottom: 10 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: "var(--b200)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#fff", flexShrink: 0 }}>?</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--b400)", marginBottom: 2 }}>Browse WiBiz Support Articles</div>
+                  <div style={{ fontSize: 11, color: "var(--ts)" }}>Step-by-step guides, troubleshooting, platform walkthroughs</div>
+                </div>
+                <span style={{ fontSize: 14, color: "var(--ts)" }}>↗</span>
+              </div>
+            </a>
+            <div style={{ fontSize: 11, color: "var(--ts)", padding: "4px 2px" }}>
+              Can't find what you need? Use the form on the left to submit a ticket and our team will help.
+            </div>
+          </div>
+
+          {/* What to expect */}
+          <div className="p-card">
+            <div className="p-card-title">What happens next?</div>
+            <div className="p-ql"><div className="p-ql-dot" />Your ticket is sent to our support team</div>
+            <div className="p-ql"><div className="p-ql-dot" />We reply to your email address</div>
+            <div className="p-ql"><div className="p-ql-dot" />High priority tickets are handled first</div>
+            <div className="p-ql"><div className="p-ql-dot" />You can submit multiple tickets any time</div>
+          </div>
+
+          {/* Direct contact */}
+          <div className="p-card">
+            <div className="p-card-title">Direct Contact</div>
+            <div style={{ fontSize: 13, color: "var(--tp)", marginBottom: 6 }}>
+              Email: <a href="mailto:support@wibiz.ai" style={{ color: "var(--b400)", textDecoration: "none" }}>support@wibiz.ai</a>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--ts)" }}>
+              For urgent issues, email us directly. For general questions, the ticket form above is the fastest way to get help.
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Account tab ──────────────────────────────────────────────────────────────
+function TabAccount({ user, onReload }: { user: DashboardData["user"]; onReload: () => void }) {
+  // ── Profile section ──
+  const [firstName,   setFirstName]   = useState(user.firstName ?? "");
+  const [lastName,    setLastName]    = useState(user.lastName ?? "");
+  const [avatarUrl,   setAvatarUrl]   = useState(user.avatarUrl ?? "");
+  const [avatarUp,    setAvatarUp]    = useState(false);
+  const [avatarErr,   setAvatarErr]   = useState("");
+  const [profSaving,  setProfSaving]  = useState(false);
+  const [profMsg,     setProfMsg]     = useState("");
+  const [profErr,     setProfErr]     = useState("");
+
+  // ── Password section ──
+  const [currentPw,   setCurrentPw]   = useState("");
+  const [newPw,       setNewPw]       = useState("");
+  const [confirmPw,   setConfirmPw]   = useState("");
+  const [pwSaving,    setPwSaving]    = useState(false);
+  const [pwMsg,       setPwMsg]       = useState("");
+  const [pwErr,       setPwErr]       = useState("");
+
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
+
+  const av = initials(user.firstName, user.lastName, user.email);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setAvatarErr("Photo must be under 5 MB."); return; }
+    const allowed = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+    if (!allowed.includes(file.type)) { setAvatarErr("Images only (PNG, JPG, GIF, WEBP)."); return; }
+    setAvatarErr("");
+    setAvatarUp(true);
+    try {
+      const url = await uploadToCloudinary(file);
+      setAvatarUrl(url);
+    } catch {
+      setAvatarErr("Upload failed. Please try again.");
+    } finally {
+      setAvatarUp(false);
+    }
+  };
+
+  const saveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfErr(""); setProfMsg("");
+    setProfSaving(true);
+    try {
+      await apiFetch("/auth/profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          firstName: firstName.trim() || null,
+          lastName:  lastName.trim() || null,
+          avatarUrl: avatarUrl || null,
+        }),
+      });
+      setProfMsg("Profile updated.");
+      onReload();
+    } catch (err) {
+      setProfErr(err instanceof ApiError ? err.message : "Update failed.");
+    } finally {
+      setProfSaving(false);
+    }
+  };
+
+  const changePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwErr(""); setPwMsg("");
+    if (newPw !== confirmPw) { setPwErr("New passwords do not match."); return; }
+    if (newPw.length < 8) { setPwErr("New password must be at least 8 characters."); return; }
+    setPwSaving(true);
+    try {
+      await apiFetch("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      });
+      setPwMsg("Password changed successfully.");
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+    } catch (err) {
+      setPwErr(err instanceof ApiError ? err.message : "Failed to change password.");
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)",
+    borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)",
+    fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box",
+  };
+
+  return (
+    <>
+      <div className="p-greet">
+        <h2>Account Settings</h2>
+        <p>Update your profile, display name, and password.</p>
+      </div>
+
+      <div className="p-two-col">
+        <div>
+          {/* Profile card */}
+          <div className="p-card">
+            <div className="p-card-title">Your Profile</div>
+
+            {/* Avatar */}
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Profile photo"
+                  style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--bdr)" }}
+                />
+              ) : (
+                <div className="p-av" style={{ width: 60, height: 60, fontSize: 22, flexShrink: 0 }}>{av}</div>
+              )}
+              <div>
+                {cloudName ? (
+                  <>
+                    <label style={{ cursor: "pointer" }}>
+                      <span className="p-btn p-btn-blue" style={{ fontSize: 11, padding: "5px 12px", display: "inline-block", cursor: "pointer" }}>
+                        {avatarUp ? "Uploading…" : avatarUrl ? "Change photo" : "Upload photo"}
+                      </span>
+                      <input type="file" accept="image/*" disabled={avatarUp} onChange={handleAvatarChange} style={{ display: "none" }} />
+                    </label>
+                    {avatarUrl && (
+                      <button type="button" style={{ display: "block", marginTop: 4, fontSize: 11, color: "var(--ts)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }} onClick={() => setAvatarUrl("")}>
+                        Remove photo
+                      </button>
+                    )}
+                    {avatarErr && <div style={{ fontSize: 11, color: "var(--r-t)", marginTop: 4 }}>{avatarErr}</div>}
+                  </>
+                ) : (
+                  <div style={{ fontSize: 11, color: "var(--ts)" }}>Profile photo upload not configured.</div>
+                )}
+              </div>
+            </div>
+
+            <form onSubmit={saveProfile}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>First name</label>
+                  <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Last name</label>
+                  <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" style={inputStyle} />
+                </div>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Email address</label>
+                <input type="email" value={user.email} readOnly style={{ ...inputStyle, opacity: 0.6, cursor: "default" }} />
+                <div style={{ fontSize: 11, color: "var(--ts)", marginTop: 4 }}>Email cannot be changed. Contact support if needed.</div>
+              </div>
+              {profMsg && <div style={{ fontSize: 12, color: "var(--g-t)", marginBottom: 8 }}>✓ {profMsg}</div>}
+              {profErr && (
+                <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>
+                  {profErr}
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button type="submit" className="p-btn p-btn-blue" disabled={profSaving || avatarUp}>
+                  {profSaving ? "Saving…" : "Save Profile →"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div>
+          {/* Change password card */}
+          <div className="p-card">
+            <div className="p-card-title">Change Password</div>
+            <div style={{ fontSize: 12, color: "var(--ts)", marginBottom: 14 }}>
+              Your password must be at least 8 characters. You will stay logged in after changing it.
+            </div>
+            <form onSubmit={changePassword}>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
+                  Current password <span style={{ color: "var(--r-t)" }}>*</span>
+                </label>
+                <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="Enter current password" required style={inputStyle} />
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
+                  New password <span style={{ color: "var(--r-t)" }}>*</span>
+                </label>
+                <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 8 characters" required style={inputStyle} />
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
+                  Confirm new password <span style={{ color: "var(--r-t)" }}>*</span>
+                </label>
+                <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Repeat new password" required style={inputStyle} />
+              </div>
+              {pwMsg && <div style={{ fontSize: 12, color: "var(--g-t)", marginBottom: 8 }}>✓ {pwMsg}</div>}
+              {pwErr && (
+                <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>
+                  {pwErr}
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button type="submit" className="p-btn p-btn-blue" disabled={pwSaving}>
+                  {pwSaving ? "Changing…" : "Change Password →"}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Account info */}
+          <div className="p-card">
+            <div className="p-card-title">Account Info</div>
+            <div style={{ fontSize: 13, color: "var(--tp)", marginBottom: 6 }}>
+              <span style={{ color: "var(--ts)", fontSize: 11 }}>Plan</span><br />
+              {capitalize(user.planTier)}
+            </div>
+            <div style={{ fontSize: 13, color: "var(--tp)", marginBottom: 6 }}>
+              <span style={{ color: "var(--ts)", fontSize: 11 }}>Vertical</span><br />
+              {capitalize(user.vertical)}
+            </div>
+            <div style={{ fontSize: 13, color: "var(--tp)" }}>
+              <span style={{ color: "var(--ts)", fontSize: 11 }}>Role</span><br />
+              {user.role === "client_admin" ? "Account owner" : user.role === "client_staff" ? "Staff member" : user.role}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Resources tab ────────────────────────────────────────────────────────────
-function TabResources({ user }: { user: DashboardData["user"] }) {
+function TabResources({ user, onTabChange }: { user: DashboardData["user"]; onTabChange: (t: Tab) => void }) {
   return (
     <>
       <div className="p-greet">
         <h2>Resources</h2>
-        <p>Everything you need to run your WiBiz system confidently. Available any time.</p>
+        <p>Academy materials, support articles, and sign-off documents — everything in one place.</p>
       </div>
       <div className="p-two-col">
         <div>
           <div className="p-card">
-            <div className="p-card-title">Loom Handover Videos</div>
+            <div className="p-card-title">Academy Resources</div>
+            <div style={{ fontSize: 11, color: "var(--ts)", marginBottom: 12 }}>
+              Your programme materials and walkthrough videos.
+            </div>
             <div className="p-ci">
               <div className="p-ci-icon ic-loom">▶</div>
               <div className="p-ci-info">
@@ -1124,9 +1622,6 @@ function TabResources({ user }: { user: DashboardData["user"] }) {
               </div>
               <span className="p-badge b-prog">Watch</span>
             </div>
-          </div>
-          <div className="p-card">
-            <div className="p-card-title">Support Documentation</div>
             <div className="p-ci">
               <div className="p-ci-icon ic-res">S</div>
               <div className="p-ci-info">
@@ -1158,6 +1653,40 @@ function TabResources({ user }: { user: DashboardData["user"] }) {
                 <div className="p-ci-meta">Calendar, reminder sequences, no-show handling</div>
               </div>
               <span className="p-badge b-prog">Open</span>
+            </div>
+          </div>
+
+          {/* Support Articles — clearly distinct from Academy resources */}
+          <div className="p-card" style={{ border: "1px solid var(--bdr)" }}>
+            <div className="p-card-title">Support Articles</div>
+            <div style={{ fontSize: 11, color: "var(--ts)", marginBottom: 14 }}>
+              Step-by-step guides and answers to common questions — separate from your Academy programme.
+            </div>
+            <a
+              href="https://start.wibiz.ai/support/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "block", textDecoration: "none", marginBottom: 12 }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "12px 14px", cursor: "pointer" }}>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: "var(--b200)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#fff", flexShrink: 0 }}>?</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--b400)", marginBottom: 2 }}>Browse WiBiz Support Articles</div>
+                  <div style={{ fontSize: 11, color: "var(--ts)" }}>Knowledge base · Platform guides · FAQs</div>
+                </div>
+                <span style={{ fontSize: 14, color: "var(--ts)" }}>↗</span>
+              </div>
+            </a>
+            <div
+              onClick={() => onTabChange("support")}
+              style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "12px 14px", cursor: "pointer" }}
+            >
+              <div style={{ width: 34, height: 34, borderRadius: 8, background: "var(--b400)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#fff", flexShrink: 0 }}>✉</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--tp)", marginBottom: 2 }}>Submit a Support Ticket</div>
+                <div style={{ fontSize: 11, color: "var(--ts)" }}>Can't find the answer? Our team will help.</div>
+              </div>
+              <span style={{ fontSize: 14, color: "var(--ts)" }}>→</span>
             </div>
           </div>
         </div>
@@ -1290,6 +1819,8 @@ export default function ClientPortal() {
     { id: "programme",  label: "My Programme" },
     { id: "team",       label: "My Team"      },
     { id: "resources",  label: "Resources"    },
+    { id: "support",    label: "Get Support"  },
+    { id: "account",    label: "My Account"   },
   ];
 
   const planLabel = user.planTier ? `${capitalize(user.planTier)} plan` : "";
@@ -1352,7 +1883,9 @@ export default function ClientPortal() {
           />
         )}
         {tab === "team"      && <TabTeam      user={user} />}
-        {tab === "resources" && <TabResources user={user} />}
+        {tab === "resources" && <TabResources user={user} onTabChange={setTab} />}
+        {tab === "support"   && <TabSupport   user={user} />}
+        {tab === "account"   && <TabAccount   user={user} onReload={load} />}
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import {
   getUserById,
   updateUserLastLogin,
   updateUserPassword,
+  updateUserProfile,
 } from "../db";
 
 export const authRouter = Router();
@@ -123,5 +124,35 @@ authRouter.post(
     await updateUserPassword(user.id, hash);
 
     res.json({ message: "Password updated successfully" });
+  }
+);
+
+// ─── PUT /api/auth/profile ────────────────────────────────────────────────────
+const profileSchema = z.object({
+  firstName: z.string().max(100).optional().nullable(),
+  lastName:  z.string().max(100).optional().nullable(),
+  avatarUrl: z.string().url().max(500).optional().nullable(),
+});
+
+authRouter.put(
+  "/profile",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const parsed = profileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    const updated = await updateUserProfile(req.user!.userId, parsed.data);
+    if (!updated) { res.status(404).json({ error: "User not found" }); return; }
+    res.json({
+      user: {
+        id:        updated.id,
+        email:     updated.email,
+        firstName: updated.firstName,
+        lastName:  updated.lastName,
+        avatarUrl: updated.avatarUrl,
+      },
+    });
   }
 );

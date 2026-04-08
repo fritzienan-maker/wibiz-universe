@@ -1,4 +1,6 @@
 import { Router, type Request, type Response } from "express";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 import { requireAuth, requireAdmin } from "../_core/auth";
 import {
@@ -20,8 +22,21 @@ import {
   listDocusealSubmissions,
   createDocusealSubmission,
   getUserById,
+  getUserByEmail,
+  createUser,
+  activateExistingUser,
+  listSupportTickets,
 } from "../db";
 import { sendCsmDocument } from "../services/docuseal";
+
+// ─── Temp password generator (same algorithm as webhook provisioning) ─────────
+function generateTempPassword(): string {
+  let pass = "";
+  while (pass.length < 12) {
+    pass += randomBytes(18).toString("base64url").replace(/[-_]/g, "");
+  }
+  return pass.slice(0, 12);
+}
 
 export const adminRouter = Router();
 
@@ -241,4 +256,66 @@ adminRouter.put("/submissions/:id/review", async (req, res): Promise<void> => {
   );
   if (!updated) { res.status(404).json({ error: "Submission not found" }); return; }
   res.json({ submission: updated });
+});
+
+// ─── GET /api/admin/support-tickets ───────────────────────────────────────────
+adminRouter.get("/support-tickets", async (_req, res): Promise<void> => {
+  const tickets = await listSupportTickets(200);
+  res.json({ tickets });
+});
+
+// ─── POST /api/admin/provision-override ───────────────────────────────────────
+// Creates or re-provisions a client account directly (for existing paid clients).
+// Returns the temporary password — admin communicates it to the client directly.
+const provisionOverrideSchema = z.object({
+  email:     z.string().email("Valid email required"),
+  firstName: z.string().max(100).optional().nullable(),
+  lastName:  z.string().max(100).optional().nullable(),
+  planTier:  z.enum(["lite", "standard", "pro"]).optional().nullable(),
+});
+
+adminRouter.post("/provision-override", async (req, res): Promise<void> => {
+  const parsed = provisionOverrideSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
+    return;
+  }
+
+  const { email, firstName, lastName, planTier } = parsed.data;
+  const tempPassword = generateTempPassword();
+  const passwordHash = await bcrypt.hash(tempPassword, 12);
+
+  const existing = await getUserByEmail(email);
+
+  if (!existing) {
+    // Create new user with client_admin role
+    const user = await createUser({
+      email:        email.toLowerCase().trim(),
+      passwordHash,
+      role:         "client_admin",
+      firstName:    firstName ?? null,
+      lastName:     lastName ?? null,
+      planTier:     planTier ?? null,
+      isActive:     true,
+      activatedAt:  new Date(),
+    });
+    res.status(201).json({
+      action:       "created",
+      email:        user.email,
+      tempPassword,
+      userId:       user.id,
+      note:         "New account created. Give the client their temporary password — they can change it after first login.",
+    });
+    return;
+  }
+
+  // Re-provision existing user: reset password, ensure active
+  await activateExistingUser(existing.id, passwordHash);
+  res.json({
+    action:       "re-provisioned",
+    email:        existing.email,
+    tempPassword,
+    userId:       existing.id,
+    note:         "Existing account re-activated with a new temporary password. Previous progress and data are preserved.",
+  });
 });

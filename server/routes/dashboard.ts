@@ -123,6 +123,7 @@ dashboardRouter.get(
         planTier:     user.planTier,
         vertical:     user.vertical,
         hskdRequired: user.hskdRequired,
+        avatarUrl:    user.avatarUrl ?? null,
       },
       modules,
       stats: {
