@@ -142,6 +142,35 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
       updated_at     TIMESTAMP    DEFAULT NOW()
     )`,
   },
+  // ── Resources + Tutorial Videos (2026-04) ────────────────────────────────
+  {
+    name: "0014_resources",
+    sql: `CREATE TABLE IF NOT EXISTS resources (
+      id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      title       VARCHAR(255) NOT NULL,
+      description TEXT,
+      category    VARCHAR(100),
+      url         TEXT,
+      icon        VARCHAR(10),
+      order_index INTEGER      NOT NULL DEFAULT 0,
+      is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+      created_at  TIMESTAMP    DEFAULT NOW(),
+      updated_at  TIMESTAMP    DEFAULT NOW()
+    )`,
+  },
+  {
+    name: "0015_tutorial_videos",
+    sql: `CREATE TABLE IF NOT EXISTS tutorial_videos (
+      id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      title       VARCHAR(255) NOT NULL,
+      duration    VARCHAR(20),
+      video_url   TEXT,
+      order_index INTEGER      NOT NULL DEFAULT 0,
+      is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+      created_at  TIMESTAMP    DEFAULT NOW(),
+      updated_at  TIMESTAMP    DEFAULT NOW()
+    )`,
+  },
 ];
 
 async function run(): Promise<void> {
