@@ -600,6 +600,76 @@ export async function listWebhookLog(limit = 100) {
     .limit(limit);
 }
 
+// ─── Resource queries ─────────────────────────────────────────────────────────
+
+export async function listResources(activeOnly = false) {
+  if (activeOnly) {
+    return db.select().from(schema.resources)
+      .where(eq(schema.resources.isActive, true))
+      .orderBy(asc(schema.resources.orderIndex), asc(schema.resources.createdAt));
+  }
+  return db.select().from(schema.resources)
+    .orderBy(asc(schema.resources.orderIndex), asc(schema.resources.createdAt));
+}
+
+export async function getResourceById(id: string) {
+  const [row] = await db.select().from(schema.resources).where(eq(schema.resources.id, id));
+  return row ?? null;
+}
+
+export async function createResource(data: typeof schema.resources.$inferInsert) {
+  const [row] = await db.insert(schema.resources).values(data).returning();
+  return row!;
+}
+
+export async function updateResource(id: string, data: Partial<typeof schema.resources.$inferInsert>) {
+  const [row] = await db
+    .update(schema.resources)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.resources.id, id))
+    .returning();
+  return row ?? null;
+}
+
+export async function deleteResource(id: string) {
+  await db.delete(schema.resources).where(eq(schema.resources.id, id));
+}
+
+// ─── Tutorial video queries ───────────────────────────────────────────────────
+
+export async function listTutorialVideos(activeOnly = false) {
+  if (activeOnly) {
+    return db.select().from(schema.tutorialVideos)
+      .where(eq(schema.tutorialVideos.isActive, true))
+      .orderBy(asc(schema.tutorialVideos.orderIndex), asc(schema.tutorialVideos.createdAt));
+  }
+  return db.select().from(schema.tutorialVideos)
+    .orderBy(asc(schema.tutorialVideos.orderIndex), asc(schema.tutorialVideos.createdAt));
+}
+
+export async function getTutorialVideoById(id: string) {
+  const [row] = await db.select().from(schema.tutorialVideos).where(eq(schema.tutorialVideos.id, id));
+  return row ?? null;
+}
+
+export async function createTutorialVideo(data: typeof schema.tutorialVideos.$inferInsert) {
+  const [row] = await db.insert(schema.tutorialVideos).values(data).returning();
+  return row!;
+}
+
+export async function updateTutorialVideo(id: string, data: Partial<typeof schema.tutorialVideos.$inferInsert>) {
+  const [row] = await db
+    .update(schema.tutorialVideos)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.tutorialVideos.id, id))
+    .returning();
+  return row ?? null;
+}
+
+export async function deleteTutorialVideo(id: string) {
+  await db.delete(schema.tutorialVideos).where(eq(schema.tutorialVideos.id, id));
+}
+
 // ─── Sync events ───────────────────────────────────────────────────────────────
 export async function logSyncEvent(data: NewSyncEvent) {
   const [event] = await db.insert(schema.syncEvents).values(data).returning();

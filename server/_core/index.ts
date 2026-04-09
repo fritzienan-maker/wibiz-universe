@@ -12,6 +12,7 @@ import { progressRouter }  from "../routes/progress";
 import { quizRouter }      from "../routes/quiz";
 import { teamRouter, inviteRouter } from "../routes/team";
 import { supportRouter } from "../routes/support";
+import { resourcesPublicRouter, staffRouter } from "../routes/resources";
 import { setupVite, serveStatic } from "./vite";
 
 validateEnv();
@@ -49,6 +50,8 @@ app.use("/api/progress",     progressRouter);
 app.use("/api/quiz",         quizRouter);
 app.use("/api/team",         teamRouter);
 app.use("/api/support",      supportRouter);
+app.use("/api/resources",    resourcesPublicRouter);
+app.use("/api/staff",        staffRouter);
 
 // ─── Frontend (Vite dev middleware or static build) ───────────────────────────
 async function startServer(): Promise<void> {

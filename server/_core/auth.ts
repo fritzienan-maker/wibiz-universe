@@ -52,3 +52,16 @@ export const requireAdmin = (
   }
   next();
 };
+
+// requireStaff — allows wibiz_admin OR operator (WiBiz internal team)
+export const requireStaff = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (req.user?.role !== "wibiz_admin" && req.user?.role !== "operator") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  next();
+};

@@ -1600,7 +1600,41 @@ function TabAccount({ user, onReload }: { user: DashboardData["user"]; onReload:
 }
 
 // ─── Resources tab ────────────────────────────────────────────────────────────
+interface ResourceItem {
+  id:          string;
+  title:       string;
+  description: string | null;
+  category:    string | null;
+  url:         string | null;
+  icon:        string | null;
+  orderIndex:  number;
+}
+
+interface TutorialItem {
+  id:         string;
+  title:      string;
+  duration:   string | null;
+  videoUrl:   string | null;
+  orderIndex: number;
+}
+
 function TabResources({ user, onTabChange }: { user: DashboardData["user"]; onTabChange: (t: Tab) => void }) {
+  const [resources,  setResources]  = useState<ResourceItem[]>([]);
+  const [tutorials,  setTutorials]  = useState<TutorialItem[]>([]);
+  const [resLoading, setResLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch<{ resources: ResourceItem[] }>("/resources"),
+      apiFetch<{ tutorials: TutorialItem[] }>("/resources/tutorials"),
+    ]).then(([r, t]) => {
+      setResources(r.resources);
+      setTutorials(t.tutorials);
+    }).catch(() => {
+      // silently degrade — static fallback still renders if API fails
+    }).finally(() => setResLoading(false));
+  }, []);
+
   return (
     <>
       <div className="p-greet">
@@ -1614,46 +1648,86 @@ function TabResources({ user, onTabChange }: { user: DashboardData["user"]; onTa
             <div style={{ fontSize: 11, color: "var(--ts)", marginBottom: 12 }}>
               Your programme materials and walkthrough videos.
             </div>
-            <div className="p-ci">
-              <div className="p-ci-icon ic-loom">▶</div>
-              <div className="p-ci-info">
-                <div className="p-ci-name">Signal Launch — {capitalize(user.planTier)} Plan Walkthrough</div>
-                <div className="p-ci-meta">Your plan · Personalised setup walkthrough</div>
-              </div>
-              <span className="p-badge b-prog">Watch</span>
-            </div>
-            <div className="p-ci">
-              <div className="p-ci-icon ic-res">S</div>
-              <div className="p-ci-info">
-                <div className="p-ci-name">Client Success Manual — {capitalize(user.planTier)}</div>
-                <div className="p-ci-meta">Your complete operating guide</div>
-              </div>
-              <span className="p-badge b-lock">Pending sign</span>
-            </div>
-            <div className="p-ci">
-              <div className="p-ci-icon ic-res">T</div>
-              <div className="p-ci-info">
-                <div className="p-ci-name">Troubleshooting Guide</div>
-                <div className="p-ci-meta">Common issues and how to fix them</div>
-              </div>
-              <span className="p-badge b-prog">Open</span>
-            </div>
-            <div className="p-ci">
-              <div className="p-ci-icon ic-res">W</div>
-              <div className="p-ci-info">
-                <div className="p-ci-name">WhatsApp Setup Guide</div>
-                <div className="p-ci-meta">WABA connection, templates, message limits</div>
-              </div>
-              <span className="p-badge b-prog">Open</span>
-            </div>
-            <div className="p-ci">
-              <div className="p-ci-icon ic-res">B</div>
-              <div className="p-ci-info">
-                <div className="p-ci-name">Booking Automation Tutorial</div>
-                <div className="p-ci-meta">Calendar, reminder sequences, no-show handling</div>
-              </div>
-              <span className="p-badge b-prog">Open</span>
-            </div>
+            {resLoading ? (
+              <div style={{ fontSize: 12, color: "var(--ts)", padding: "8px 0" }}>Loading…</div>
+            ) : resources.length > 0 ? (
+              resources.map((r) => (
+                r.url ? (
+                  <a
+                    key={r.id}
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: "none" }}
+                  >
+                    <div className="p-ci">
+                      <div className={`p-ci-icon ${r.category === "video" ? "ic-loom" : "ic-res"}`}>
+                        {r.icon || (r.category === "video" ? "▶" : "R")}
+                      </div>
+                      <div className="p-ci-info">
+                        <div className="p-ci-name">{r.title}</div>
+                        {r.description && <div className="p-ci-meta">{r.description}</div>}
+                      </div>
+                      <span className="p-badge b-prog">{r.category === "video" ? "Watch" : "Open"}</span>
+                    </div>
+                  </a>
+                ) : (
+                  <div key={r.id} className="p-ci">
+                    <div className={`p-ci-icon ${r.category === "video" ? "ic-loom" : "ic-res"}`}>
+                      {r.icon || (r.category === "video" ? "▶" : "R")}
+                    </div>
+                    <div className="p-ci-info">
+                      <div className="p-ci-name">{r.title}</div>
+                      {r.description && <div className="p-ci-meta">{r.description}</div>}
+                    </div>
+                    <span className="p-badge b-prog">{r.category === "video" ? "Watch" : "Open"}</span>
+                  </div>
+                )
+              ))
+            ) : (
+              <>
+                <div className="p-ci">
+                  <div className="p-ci-icon ic-loom">▶</div>
+                  <div className="p-ci-info">
+                    <div className="p-ci-name">Signal Launch — {capitalize(user.planTier)} Plan Walkthrough</div>
+                    <div className="p-ci-meta">Your plan · Personalised setup walkthrough</div>
+                  </div>
+                  <span className="p-badge b-prog">Watch</span>
+                </div>
+                <div className="p-ci">
+                  <div className="p-ci-icon ic-res">S</div>
+                  <div className="p-ci-info">
+                    <div className="p-ci-name">Client Success Manual — {capitalize(user.planTier)}</div>
+                    <div className="p-ci-meta">Your complete operating guide</div>
+                  </div>
+                  <span className="p-badge b-lock">Pending sign</span>
+                </div>
+                <div className="p-ci">
+                  <div className="p-ci-icon ic-res">T</div>
+                  <div className="p-ci-info">
+                    <div className="p-ci-name">Troubleshooting Guide</div>
+                    <div className="p-ci-meta">Common issues and how to fix them</div>
+                  </div>
+                  <span className="p-badge b-prog">Open</span>
+                </div>
+                <div className="p-ci">
+                  <div className="p-ci-icon ic-res">W</div>
+                  <div className="p-ci-info">
+                    <div className="p-ci-name">WhatsApp Setup Guide</div>
+                    <div className="p-ci-meta">WABA connection, templates, message limits</div>
+                  </div>
+                  <span className="p-badge b-prog">Open</span>
+                </div>
+                <div className="p-ci">
+                  <div className="p-ci-icon ic-res">B</div>
+                  <div className="p-ci-info">
+                    <div className="p-ci-name">Booking Automation Tutorial</div>
+                    <div className="p-ci-meta">Calendar, reminder sequences, no-show handling</div>
+                  </div>
+                  <span className="p-badge b-prog">Open</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Support Articles — clearly distinct from Academy resources */}
@@ -1693,12 +1767,40 @@ function TabResources({ user, onTabChange }: { user: DashboardData["user"]; onTa
         <div>
           <div className="p-card">
             <div className="p-card-title">Platform Tutorial Videos</div>
-            <div className="p-ql"><div className="p-ql-dot" />Dashboard orientation (5 min)</div>
-            <div className="p-ql"><div className="p-ql-dot" />WhatsApp channel setup (8 min)</div>
-            <div className="p-ql"><div className="p-ql-dot" />CRM and contact tagging (6 min)</div>
-            <div className="p-ql"><div className="p-ql-dot" />Booking automation walkthrough (10 min)</div>
-            <div className="p-ql"><div className="p-ql-dot" />Payment link activation (4 min)</div>
-            <div className="p-ql"><div className="p-ql-dot" />Reporting dashboard (7 min)</div>
+            {resLoading ? (
+              <div style={{ fontSize: 12, color: "var(--ts)", padding: "8px 0" }}>Loading…</div>
+            ) : tutorials.length > 0 ? (
+              tutorials.map((t) =>
+                t.videoUrl ? (
+                  <a
+                    key={t.id}
+                    href={t.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: "none" }}
+                  >
+                    <div className="p-ql" style={{ cursor: "pointer" }}>
+                      <div className="p-ql-dot" />
+                      {t.title}{t.duration ? ` (${t.duration})` : ""}
+                    </div>
+                  </a>
+                ) : (
+                  <div key={t.id} className="p-ql">
+                    <div className="p-ql-dot" />
+                    {t.title}{t.duration ? ` (${t.duration})` : ""}
+                  </div>
+                )
+              )
+            ) : (
+              <>
+                <div className="p-ql"><div className="p-ql-dot" />Dashboard orientation (5 min)</div>
+                <div className="p-ql"><div className="p-ql-dot" />WhatsApp channel setup (8 min)</div>
+                <div className="p-ql"><div className="p-ql-dot" />CRM and contact tagging (6 min)</div>
+                <div className="p-ql"><div className="p-ql-dot" />Booking automation walkthrough (10 min)</div>
+                <div className="p-ql"><div className="p-ql-dot" />Payment link activation (4 min)</div>
+                <div className="p-ql"><div className="p-ql-dot" />Reporting dashboard (7 min)</div>
+              </>
+            )}
           </div>
           <div className="p-card">
             <div className="p-card-title">Your Sign-Off Documents</div>

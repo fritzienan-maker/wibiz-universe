@@ -190,6 +190,32 @@ export const supportTickets = pgTable("support_tickets", {
   updatedAt:     timestamp("updated_at").defaultNow(),
 });
 
+// ─── Resources ────────────────────────────────────────────────────────────────
+export const resources = pgTable("resources", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  title:       varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  category:    varchar("category", { length: 100 }),  // 'video' | 'guide' | 'document'
+  url:         text("url"),                            // external link or video URL
+  icon:        varchar("icon", { length: 10 }),        // single display char, e.g. '▶', 'T', 'W'
+  orderIndex:  integer("order_index").notNull().default(0),
+  isActive:    boolean("is_active").notNull().default(true),
+  createdAt:   timestamp("created_at").defaultNow(),
+  updatedAt:   timestamp("updated_at").defaultNow(),
+});
+
+// ─── Tutorial Videos ──────────────────────────────────────────────────────────
+export const tutorialVideos = pgTable("tutorial_videos", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  title:      varchar("title", { length: 255 }).notNull(),
+  duration:   varchar("duration", { length: 20 }),  // e.g. '5 min'
+  videoUrl:   text("video_url"),                    // YouTube/Loom/Vimeo URL
+  orderIndex: integer("order_index").notNull().default(0),
+  isActive:   boolean("is_active").notNull().default(true),
+  createdAt:  timestamp("created_at").defaultNow(),
+  updatedAt:  timestamp("updated_at").defaultNow(),
+});
+
 // ─── Inferred types ───────────────────────────────────────────────────────────
 export type User         = typeof users.$inferSelect;
 export type NewUser      = typeof users.$inferInsert;

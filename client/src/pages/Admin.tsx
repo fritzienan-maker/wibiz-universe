@@ -93,7 +93,55 @@ interface ModuleFormValues {
   isActive:    boolean;
 }
 
-type Tab = "users" | "sync" | "webhooks" | "modules" | "submissions" | "provision";
+type Tab = "users" | "sync" | "webhooks" | "modules" | "submissions" | "provision" | "resources";
+
+interface ResourceRow {
+  id:          string;
+  title:       string;
+  description: string | null;
+  category:    string | null;
+  url:         string | null;
+  icon:        string | null;
+  orderIndex:  number;
+  isActive:    boolean;
+  createdAt:   string | null;
+}
+
+interface ResourceFormValues {
+  title:       string;
+  description: string;
+  category:    string;
+  url:         string;
+  icon:        string;
+  orderIndex:  string;
+  isActive:    boolean;
+}
+
+interface TutorialRow {
+  id:         string;
+  title:      string;
+  duration:   string | null;
+  videoUrl:   string | null;
+  orderIndex: number;
+  isActive:   boolean;
+  createdAt:  string | null;
+}
+
+interface TutorialFormValues {
+  title:      string;
+  duration:   string;
+  videoUrl:   string;
+  orderIndex: string;
+  isActive:   boolean;
+}
+
+const emptyResourceForm = (): ResourceFormValues => ({
+  title: "", description: "", category: "guide", url: "", icon: "", orderIndex: "0", isActive: true,
+});
+
+const emptyTutorialForm = (): TutorialFormValues => ({
+  title: "", duration: "", videoUrl: "", orderIndex: "0", isActive: true,
+});
 
 const emptyExForm = (): ExerciseFormValues => ({
   title: "", description: "", proofPrompt: "", videoUrl: "", dayNumber: "", orderIndex: "0", isActive: true,
@@ -606,6 +654,356 @@ function TabSubmissions() {
   );
 }
 
+// ─── Resources + Tutorial Videos CRUD tab ────────────────────────────────────
+function TabResources() {
+  const [resources,     setResources]     = useState<ResourceRow[]>([]);
+  const [tutorials,     setTutorials]     = useState<TutorialRow[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [section,       setSection]       = useState<"resources" | "tutorials">("resources");
+
+  // Resource modal
+  const [resModal,      setResModal]      = useState(false);
+  const [resEdit,       setResEdit]       = useState<ResourceRow | null>(null);
+  const [resForm,       setResForm]       = useState<ResourceFormValues>(emptyResourceForm());
+  const [resSaving,     setResSaving]     = useState(false);
+  const [resErr,        setResErr]        = useState("");
+  const [resDeleting,   setResDeleting]   = useState<string | null>(null);
+
+  // Tutorial modal
+  const [tutModal,      setTutModal]      = useState(false);
+  const [tutEdit,       setTutEdit]       = useState<TutorialRow | null>(null);
+  const [tutForm,       setTutForm]       = useState<TutorialFormValues>(emptyTutorialForm());
+  const [tutSaving,     setTutSaving]     = useState(false);
+  const [tutErr,        setTutErr]        = useState("");
+  const [tutDeleting,   setTutDeleting]   = useState<string | null>(null);
+
+  const loadAll = async () => {
+    const [r, t] = await Promise.all([
+      apiFetch<{ resources: ResourceRow[] }>("/staff/resources"),
+      apiFetch<{ tutorials: TutorialRow[] }>("/staff/tutorials"),
+    ]);
+    setResources(r.resources);
+    setTutorials(t.tutorials);
+  };
+
+  useEffect(() => { loadAll().finally(() => setLoading(false)); }, []);
+
+  // ── Resource handlers ──────────────────────────────────────────────────────
+  const openResCreate = () => { setResEdit(null); setResForm(emptyResourceForm()); setResErr(""); setResModal(true); };
+  const openResEdit   = (r: ResourceRow) => {
+    setResEdit(r);
+    setResForm({ title: r.title, description: r.description ?? "", category: r.category ?? "guide", url: r.url ?? "", icon: r.icon ?? "", orderIndex: r.orderIndex.toString(), isActive: r.isActive });
+    setResErr(""); setResModal(true);
+  };
+  const closeResModal = () => { setResModal(false); setResEdit(null); };
+
+  const saveResource = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resForm.title.trim()) { setResErr("Title is required."); return; }
+    setResSaving(true); setResErr("");
+    try {
+      const body = {
+        title:       resForm.title.trim(),
+        description: resForm.description.trim() || null,
+        category:    resForm.category || null,
+        url:         resForm.url.trim() || null,
+        icon:        resForm.icon.trim() || null,
+        orderIndex:  parseInt(resForm.orderIndex) || 0,
+        isActive:    resForm.isActive,
+      };
+      if (resEdit) {
+        await apiFetch(`/staff/resources/${resEdit.id}`, { method: "PUT", body: JSON.stringify(body) });
+      } else {
+        await apiFetch("/staff/resources", { method: "POST", body: JSON.stringify(body) });
+      }
+      const data = await apiFetch<{ resources: ResourceRow[] }>("/staff/resources");
+      setResources(data.resources);
+      closeResModal();
+    } catch (err) {
+      setResErr(err instanceof ApiError ? err.message : "Save failed. Try again.");
+    } finally {
+      setResSaving(false);
+    }
+  };
+
+  const deleteResource = async (id: string) => {
+    if (!confirm("Delete this resource? This cannot be undone.")) return;
+    setResDeleting(id);
+    try {
+      await apiFetch(`/staff/resources/${id}`, { method: "DELETE" });
+      setResources((prev) => prev.filter((r) => r.id !== id));
+    } finally {
+      setResDeleting(null);
+    }
+  };
+
+  // ── Tutorial handlers ──────────────────────────────────────────────────────
+  const openTutCreate = () => { setTutEdit(null); setTutForm(emptyTutorialForm()); setTutErr(""); setTutModal(true); };
+  const openTutEdit   = (t: TutorialRow) => {
+    setTutEdit(t);
+    setTutForm({ title: t.title, duration: t.duration ?? "", videoUrl: t.videoUrl ?? "", orderIndex: t.orderIndex.toString(), isActive: t.isActive });
+    setTutErr(""); setTutModal(true);
+  };
+  const closeTutModal = () => { setTutModal(false); setTutEdit(null); };
+
+  const saveTutorial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tutForm.title.trim()) { setTutErr("Title is required."); return; }
+    setTutSaving(true); setTutErr("");
+    try {
+      const body = {
+        title:      tutForm.title.trim(),
+        duration:   tutForm.duration.trim() || null,
+        videoUrl:   tutForm.videoUrl.trim() || null,
+        orderIndex: parseInt(tutForm.orderIndex) || 0,
+        isActive:   tutForm.isActive,
+      };
+      if (tutEdit) {
+        await apiFetch(`/staff/tutorials/${tutEdit.id}`, { method: "PUT", body: JSON.stringify(body) });
+      } else {
+        await apiFetch("/staff/tutorials", { method: "POST", body: JSON.stringify(body) });
+      }
+      const data = await apiFetch<{ tutorials: TutorialRow[] }>("/staff/tutorials");
+      setTutorials(data.tutorials);
+      closeTutModal();
+    } catch (err) {
+      setTutErr(err instanceof ApiError ? err.message : "Save failed. Try again.");
+    } finally {
+      setTutSaving(false);
+    }
+  };
+
+  const deleteTutorial = async (id: string) => {
+    if (!confirm("Delete this tutorial video? This cannot be undone.")) return;
+    setTutDeleting(id);
+    try {
+      await apiFetch(`/staff/tutorials/${id}`, { method: "DELETE" });
+      setTutorials((prev) => prev.filter((t) => t.id !== id));
+    } finally {
+      setTutDeleting(null);
+    }
+  };
+
+  const inputCls = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
+
+  if (loading) return <p className="text-sm text-muted-foreground py-4">Loading…</p>;
+
+  return (
+    <div className="space-y-4">
+      {/* Section switcher */}
+      <div className="flex gap-1 p-1 bg-muted/30 rounded-lg w-fit">
+        {(["resources", "tutorials"] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setSection(s)}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${section === s ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {s === "resources" ? `Academy Resources (${resources.length})` : `Tutorial Videos (${tutorials.length})`}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Academy Resources ── */}
+      {section === "resources" && (
+        <>
+          {/* Resource modal */}
+          {resModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-lg mx-4">
+                <form onSubmit={saveResource}>
+                  <div className="px-6 py-5 border-b border-border flex justify-between items-center">
+                    <h2 className="font-semibold text-foreground text-base">{resEdit ? "Edit Resource" : "Add Resource"}</h2>
+                    <button type="button" onClick={closeResModal} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+                  </div>
+                  <div className="px-6 py-5 space-y-4">
+                    {resErr && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{resErr}</p>}
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Title *</label>
+                      <input type="text" value={resForm.title} onChange={(e) => setResForm((f) => ({ ...f, title: e.target.value }))} placeholder="e.g. WhatsApp Setup Guide" className={inputCls} required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Description</label>
+                      <textarea value={resForm.description} onChange={(e) => setResForm((f) => ({ ...f, description: e.target.value }))} rows={2} placeholder="Short description shown to clients" className={`${inputCls} resize-none`} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">Category</label>
+                        <select value={resForm.category} onChange={(e) => setResForm((f) => ({ ...f, category: e.target.value }))} className={inputCls}>
+                          <option value="guide">Guide</option>
+                          <option value="video">Video</option>
+                          <option value="document">Document</option>
+                          <option value="tool">Tool</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">Icon (1 char)</label>
+                        <input type="text" maxLength={10} value={resForm.icon} onChange={(e) => setResForm((f) => ({ ...f, icon: e.target.value }))} placeholder="▶ T W B" className={inputCls} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">URL / Link</label>
+                      <input type="text" value={resForm.url} onChange={(e) => setResForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." className={inputCls} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 items-end">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">Order</label>
+                        <input type="number" min={0} value={resForm.orderIndex} onChange={(e) => setResForm((f) => ({ ...f, orderIndex: e.target.value }))} className={inputCls} />
+                      </div>
+                      <div className="flex items-center gap-2 pb-2">
+                        <input type="checkbox" id="res-active" checked={resForm.isActive} onChange={(e) => setResForm((f) => ({ ...f, isActive: e.target.checked }))} className="w-4 h-4 accent-primary" />
+                        <label htmlFor="res-active" className="text-sm text-foreground">Active</label>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-border flex justify-end gap-3">
+                    <button type="button" onClick={closeResModal} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg">Cancel</button>
+                    <button type="submit" disabled={resSaving} className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                      {resSaving ? "Saving…" : "Save Resource"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">Manage Academy Resources visible on the client Resources tab. Changes apply immediately.</p>
+            <button onClick={openResCreate} className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">+ Add Resource</button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b border-border">
+                  {["Order", "Icon", "Title", "Category", "URL", "Status", "Actions"].map((h) => (
+                    <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {resources.map((r) => (
+                  <tr key={r.id} className="border-b border-border/40 hover:bg-muted/20">
+                    <td className="py-3 pr-4 text-muted-foreground font-mono text-xs">{r.orderIndex}</td>
+                    <td className="py-3 pr-4 text-base">{r.icon ?? "—"}</td>
+                    <td className="py-3 pr-4 font-medium text-foreground max-w-xs truncate">{r.title}</td>
+                    <td className="py-3 pr-4 text-xs text-muted-foreground capitalize">{r.category ?? "—"}</td>
+                    <td className="py-3 pr-4 text-xs text-muted-foreground max-w-[160px] truncate">
+                      {r.url ? <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{r.url}</a> : "—"}
+                    </td>
+                    <td className="py-3 pr-4">
+                      <StatusBadge ok={r.isActive} label={r.isActive ? "Active" : "Hidden"} />
+                    </td>
+                    <td className="py-3 flex gap-2">
+                      <button onClick={() => openResEdit(r)} className="text-xs px-3 py-1 border border-border rounded-lg text-foreground hover:bg-muted/40">Edit</button>
+                      <button onClick={() => deleteResource(r.id)} disabled={resDeleting === r.id} className="text-xs px-3 py-1 border border-destructive/40 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-50">
+                        {resDeleting === r.id ? "…" : "Delete"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {resources.length === 0 && (
+                  <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">No resources yet. <button onClick={openResCreate} className="text-primary underline">Add the first one.</button></td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* ── Tutorial Videos ── */}
+      {section === "tutorials" && (
+        <>
+          {/* Tutorial modal */}
+          {tutModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-lg mx-4">
+                <form onSubmit={saveTutorial}>
+                  <div className="px-6 py-5 border-b border-border flex justify-between items-center">
+                    <h2 className="font-semibold text-foreground text-base">{tutEdit ? "Edit Tutorial Video" : "Add Tutorial Video"}</h2>
+                    <button type="button" onClick={closeTutModal} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+                  </div>
+                  <div className="px-6 py-5 space-y-4">
+                    {tutErr && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{tutErr}</p>}
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Title *</label>
+                      <input type="text" value={tutForm.title} onChange={(e) => setTutForm((f) => ({ ...f, title: e.target.value }))} placeholder="e.g. Dashboard orientation" className={inputCls} required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">Duration</label>
+                        <input type="text" value={tutForm.duration} onChange={(e) => setTutForm((f) => ({ ...f, duration: e.target.value }))} placeholder="5 min" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">Order</label>
+                        <input type="number" min={0} value={tutForm.orderIndex} onChange={(e) => setTutForm((f) => ({ ...f, orderIndex: e.target.value }))} className={inputCls} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">Video URL (YouTube / Loom / Vimeo)</label>
+                      <input type="text" value={tutForm.videoUrl} onChange={(e) => setTutForm((f) => ({ ...f, videoUrl: e.target.value }))} placeholder="https://www.loom.com/share/..." className={inputCls} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="tut-active" checked={tutForm.isActive} onChange={(e) => setTutForm((f) => ({ ...f, isActive: e.target.checked }))} className="w-4 h-4 accent-primary" />
+                      <label htmlFor="tut-active" className="text-sm text-foreground">Active (visible to clients)</label>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-border flex justify-end gap-3">
+                    <button type="button" onClick={closeTutModal} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg">Cancel</button>
+                    <button type="submit" disabled={tutSaving} className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                      {tutSaving ? "Saving…" : "Save Tutorial"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">Manage Platform Tutorial Videos shown in the client Resources tab. Changes apply immediately.</p>
+            <button onClick={openTutCreate} className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">+ Add Tutorial</button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b border-border">
+                  {["Order", "Title", "Duration", "Video URL", "Status", "Actions"].map((h) => (
+                    <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tutorials.map((t) => (
+                  <tr key={t.id} className="border-b border-border/40 hover:bg-muted/20">
+                    <td className="py-3 pr-4 text-muted-foreground font-mono text-xs">{t.orderIndex}</td>
+                    <td className="py-3 pr-4 font-medium text-foreground max-w-xs truncate">{t.title}</td>
+                    <td className="py-3 pr-4 text-xs text-muted-foreground">{t.duration ?? "—"}</td>
+                    <td className="py-3 pr-4 text-xs text-muted-foreground max-w-[200px] truncate">
+                      {t.videoUrl ? <a href={t.videoUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t.videoUrl}</a> : <span className="text-muted-foreground/50">No URL</span>}
+                    </td>
+                    <td className="py-3 pr-4">
+                      <StatusBadge ok={t.isActive} label={t.isActive ? "Active" : "Hidden"} />
+                    </td>
+                    <td className="py-3 flex gap-2">
+                      <button onClick={() => openTutEdit(t)} className="text-xs px-3 py-1 border border-border rounded-lg text-foreground hover:bg-muted/40">Edit</button>
+                      <button onClick={() => deleteTutorial(t.id)} disabled={tutDeleting === t.id} className="text-xs px-3 py-1 border border-destructive/40 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-50">
+                        {tutDeleting === t.id ? "…" : "Delete"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {tutorials.length === 0 && (
+                  <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No tutorial videos yet. <button onClick={openTutCreate} className="text-primary underline">Add the first one.</button></td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [tab,         setTab]         = useState<Tab>("users");
@@ -707,6 +1105,7 @@ export default function AdminPage() {
     users:       `Users (${users.length})`,
     modules:     `Modules (${modules.length})`,
     submissions: "Submissions",
+    resources:   "Resources",
     sync:        "Sync Events",
     webhooks:    "Webhook Log",
     provision:   "Provision Client",
@@ -759,7 +1158,7 @@ export default function AdminPage() {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Tabs */}
         <div className="flex gap-1 border-b border-border">
-          {(["users", "modules", "submissions", "sync", "webhooks", "provision"] as Tab[]).map((t) => (
+          {(["users", "modules", "submissions", "resources", "sync", "webhooks", "provision"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -914,6 +1313,9 @@ export default function AdminPage() {
 
         {/* ── Submissions ── */}
         {tab === "submissions" && <TabSubmissions />}
+
+        {/* ── Resources ── */}
+        {tab === "resources" && <TabResources />}
 
         {/* ── Sync Events ── */}
         {tab === "sync" && (
