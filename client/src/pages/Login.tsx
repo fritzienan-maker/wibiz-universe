@@ -110,6 +110,18 @@ export default function LoginPage() {
             {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
+
+        {/* Footer Links */}
+        <div className="mt-6 text-center text-xs text-muted-foreground">
+          <a href="/privacy-policy" className="underline hover:text-foreground">
+            Privacy Policy
+          </a>
+          {" | "}
+          <a href="/terms" className="underline hover:text-foreground">
+            Terms & Conditions
+          </a>
+        </div>
+
       </div>
     </div>
   );
