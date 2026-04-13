@@ -923,7 +923,7 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
     <>
       <div className="p-greet">
         <h2>My Team</h2>
-        <p>Invite staff members to join your WiBiz Academy portal. Track their programme progress below.</p>
+        <p>Invite staff members to join your WiBiz Universe portal. Track their programme progress below.</p>
       </div>
 
       {/* Invite form card */}

@@ -38,7 +38,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-card rounded-2xl shadow-sm border border-border p-8">
         {/* Header */}
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-foreground">WiBiz Academy</h1>
+          <h1 className="text-2xl font-bold text-foreground">WiBiz Universe</h1>
           <p className="text-muted-foreground text-sm mt-1">Sign in to your account</p>
         </div>
 

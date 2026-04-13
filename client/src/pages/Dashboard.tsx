@@ -65,7 +65,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card border-b border-border px-6 py-4 flex justify-between items-center">
-        <span className="text-lg font-bold text-foreground">WiBiz Academy</span>
+        <span className="text-lg font-bold text-foreground">WiBiz Universe</span>
         <div className="flex items-center gap-4">
           {user.role === "wibiz_admin" && (
             <Link to="/admin" className="text-sm text-primary hover:text-primary/80 font-medium">

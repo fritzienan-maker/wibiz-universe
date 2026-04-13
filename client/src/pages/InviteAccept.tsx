@@ -81,7 +81,7 @@ export default function InviteAccept() {
                   You've been invited
                 </h2>
                 <p style={{ fontSize: 12, color: "var(--ts)", lineHeight: 1.6 }}>
-                  Set a password to activate your WiBiz Academy account for <strong style={{ color: "var(--tp)" }}>{info!.email}</strong>.
+                  Set a password to activate your WiBiz Universe account for <strong style={{ color: "var(--tp)" }}>{info!.email}</strong>.
                 </p>
               </div>
 
