@@ -4,11 +4,11 @@ import LoginPage    from "./pages/Login";
 import ClientPortal  from "./pages/ClientPortal";
 import AdminPage    from "./pages/Admin";
 import InviteAccept from "./pages/InviteAccept";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import Terms from "./pages/Terms";
 import { apiFetch, ApiError } from "./lib/api";
 
 // ─── Auth state hook ──────────────────────────────────────────────────────────
-// Calls GET /api/auth/me once per mount.  Does NOT read localStorage.
-// The httpOnly cookie is sent automatically by the browser.
 type Status = "loading" | "authed" | "unauthed";
 
 interface MeResponse {
@@ -26,7 +26,7 @@ function useMe() {
       .then((u) => { setUser(u); setStatus("authed"); })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) setStatus("unauthed");
-        else setStatus("unauthed"); // network error → treat as unauthed
+        else setStatus("unauthed");
       });
   }, []);
 
@@ -72,6 +72,8 @@ export default function App() {
           element={<AdminRoute><AdminPage /></AdminRoute>}
         />
         <Route path="/invite/:token" element={<InviteAccept />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
