@@ -5,16 +5,20 @@ import { apiFetch, ApiError } from "../lib/api";
 export default function LoginPage() {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
+  const [consent,  setConsent]  = useState(false);
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!consent) {
+      setError("You must agree to the Privacy Policy and Terms to continue.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
-      // Cookie is set server-side — no token handling needed here
       await apiFetch("/auth/login", {
         method: "POST",
         body:   JSON.stringify({ email, password }),
@@ -38,7 +42,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-card rounded-2xl shadow-sm border border-border p-8">
         {/* Header */}
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-foreground">WiBiz Universe</h1>
+          <h1 className="text-2xl font-bold text-foreground">Universe</h1>
           <p className="text-muted-foreground text-sm mt-1">Sign in to your account</p>
         </div>
 
@@ -71,6 +75,27 @@ export default function LoginPage() {
               className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Your temporary password"
             />
+          </div>
+
+          {/* Consent Checkbox */}
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              id="consent"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              className="mt-1 cursor-pointer"
+            />
+            <label htmlFor="consent" className="text-sm text-muted-foreground">
+              I agree to the{" "}
+              <a href="/privacy-policy" className="underline text-primary" target="_blank">
+                Privacy Policy
+              </a>{" "}
+              and{" "}
+              <a href="/terms" className="underline text-primary" target="_blank">
+                Terms and Conditions
+              </a>
+            </label>
           </div>
 
           {error && (
