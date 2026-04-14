@@ -19,6 +19,7 @@ export default function HskdPage() {
   const [industries, setIndustries] = useState<Industry[]>([]);
   const [error, setError]           = useState("");
   const [loading, setLoading]       = useState(true);
+  const [starting, setStarting]     = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -35,14 +36,27 @@ export default function HskdPage() {
   }, [navigate]);
 
   const handleBegin = async (industry: Industry) => {
+    setStarting(industry.id);
+    setError("");
     try {
-      await apiFetch("/client/hskd/certifications", {
+      const res = await apiFetch<{ certification: { id: string } }>("/client/hskd/start", {
         method: "POST",
         body: JSON.stringify({ industry_id: industry.id }),
       });
       navigate(`/hskd/certify/${industry.slug}/training`);
-    } catch {
-      setError("Failed to start certification. Please try again.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          // Already has active certification — just navigate
+          navigate(`/hskd/certify/${industry.slug}/training`);
+        } else {
+          setError(err.message ?? "Failed to start certification. Please try again.");
+        }
+      } else {
+        setError("Failed to start certification. Please try again.");
+      }
+    } finally {
+      setStarting(null);
     }
   };
 
@@ -88,6 +102,7 @@ export default function HskdPage() {
             {industries.map((industry) => {
               const cert = industry.certification;
               const isTier0 = industry.tier === "TIER_0";
+              const isStarting = starting === industry.id;
 
               return (
                 <div
@@ -163,9 +178,10 @@ export default function HskdPage() {
                   ) : (
                     <button
                       onClick={() => handleBegin(industry)}
-                      className="w-full text-xs px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+                      disabled={isStarting}
+                      className="w-full text-xs px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
-                      Begin Certification
+                      {isStarting ? "Starting…" : "Begin Certification"}
                     </button>
                   )}
                 </div>
