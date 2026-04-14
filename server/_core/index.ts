@@ -8,6 +8,7 @@ import { authRouter }      from "../routes/auth";
 import { webhookRouter }   from "../routes/webhooks";
 import { dashboardRouter } from "../routes/dashboard";
 import { adminRouter }     from "../routes/admin";
+import { hskdRouter }      from "../routes/hskd";
 import { progressRouter }  from "../routes/progress";
 import { quizRouter }      from "../routes/quiz";
 import { teamRouter, inviteRouter } from "../routes/team";
@@ -46,6 +47,7 @@ app.use("/api/auth/invite",  inviteRouter);
 app.use("/api/webhooks",     webhookRouter);
 app.use("/api/dashboard",    dashboardRouter);
 app.use("/api/admin",        adminRouter);
+app.use("/api/admin/hskd",   hskdRouter);
 app.use("/api/progress",     progressRouter);
 app.use("/api/quiz",         quizRouter);
 app.use("/api/team",         teamRouter);
@@ -62,12 +64,12 @@ async function startServer(): Promise<void> {
   }
 
   server.listen(ENV.port, () => {
-    console.log(`[server] WiBiz Academy listening on http://localhost:${ENV.port}`);
-    console.log(`[server] Mode: ${ENV.isProduction ? "production" : "development"}`);
+    console.log(`[server] WiBiz Academy listening on http://localhost:${ENV.port} - index.ts:67`);
+    console.log(`[server] Mode: ${ENV.isProduction ? "production" : "development"} - index.ts:68`);
   });
 }
 
 startServer().catch((err) => {
-  console.error("[server] Fatal startup error:", err);
+  console.error("[server] Fatal startup error: - index.ts:73", err);
   process.exit(1);
 });
