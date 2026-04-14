@@ -297,6 +297,19 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
     name: "0024_users_hskd_required",
     sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS hskd_required BOOLEAN NOT NULL DEFAULT FALSE`,
   },
+  // ── HSKD US Seed Data (2026-04) ───────────────────────────────────────────
+  {
+    name: "0025_hskd_seed_us_content",
+    sql: `
+INSERT INTO hskd_industries (id, slug, name, tier, description, is_active) VALUES
+  ('a1000000-0000-0000-0000-000000000001', 'real-estate', 'Real Estate', 'TIER_1', 'AI certification for real estate agents, brokers, and property managers operating under Fair Housing Act, NAR settlement, FTC, state UPL, and STR local ordinances.', TRUE),
+  ('a1000000-0000-0000-0000-000000000002', 'clinics', 'Clinics & Medical Practices', 'TIER_1', 'AI certification for clinics and medical practices. HIPAA BAA required. Covers state licensing, telehealth parity, and 988 Lifeline integration.', TRUE),
+  ('a1000000-0000-0000-0000-000000000003', 'legal-services', 'Legal Services', 'TIER_1', 'AI certification for legal service providers. Covers ABA Model Rules, state bar verification, EEOC compliance, and UPL statutes.', TRUE),
+  ('a1000000-0000-0000-0000-000000000004', 'social-welfare', 'Social Welfare & Caregiver Support', 'TIER_0', 'TIER 0 - Highest risk certification. Covers APS mandatory reporter obligations, Elder Justice Act, HIPAA BAA, 24hr monitoring, and Silver Alert protocols.', TRUE),
+  ('a1000000-0000-0000-0000-000000000005', 'restaurants', 'Restaurants & F&B', 'TIER_1', 'AI certification for restaurants and food & beverage businesses. Covers FASTER Act sesame allergen requirements, FTC UDAP, FDA Big 9 allergens, and 911 routing.', TRUE)
+ON CONFLICT (id) DO NOTHING
+    `,
+  },
 ];
 
 async function run(): Promise<void> {
@@ -310,9 +323,9 @@ async function run(): Promise<void> {
   const db = drizzle(pool);
   const migrationsFolder = path.resolve(__dirname, "..", "drizzle", "migrations");
 
-  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:313");
+  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:326");
   await migrate(db, { migrationsFolder });
-  console.log("[migrate] Drizzle migrations complete - migrate.ts:315");
+  console.log("[migrate] Drizzle migrations complete - migrate.ts:328");
 
   if (CUSTOM_MIGRATIONS.length > 0) {
     await pool.query(`
@@ -328,7 +341,7 @@ async function run(): Promise<void> {
         [m.name]
       );
       if (rows.length > 0) {
-        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:331`);
+        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:344`);
         continue;
       }
       try {
@@ -337,21 +350,21 @@ async function run(): Promise<void> {
           "INSERT INTO _custom_migrations (name) VALUES ($1)",
           [m.name]
         );
-        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:340`);
+        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:353`);
       } catch (err: any) {
-        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:342`, err.message);
+        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:355`, err.message);
         await pool.end();
         process.exit(1);
       }
     }
   }
 
-  console.log("[migrate] Custom migrations count: - migrate.ts:349", CUSTOM_MIGRATIONS.length);
+  console.log("[migrate] Custom migrations count: - migrate.ts:362", CUSTOM_MIGRATIONS.length);
   await pool.end();
-  console.log("[migrate] All migrations complete - migrate.ts:351");
+  console.log("[migrate] All migrations complete - migrate.ts:364");
 }
 
 run().catch((err) => {
-  console.error("[migrate] Fatal error: - migrate.ts:355", err);
+  console.error("[migrate] Fatal error: - migrate.ts:368", err);
   process.exit(1);
 });
