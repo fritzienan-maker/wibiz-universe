@@ -37,7 +37,6 @@ const industrySelectSchema = z.object({
 
 // ─── INDUSTRIES ───────────────────────────────────────────────────────────────
 
-// GET /api/client/hskd/industries
 hskdClientRouter.get("/industries", async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await db.execute(
@@ -51,7 +50,6 @@ hskdClientRouter.get("/industries", async (_req: Request, res: Response): Promis
 
 // ─── CERTIFICATION STATE ──────────────────────────────────────────────────────
 
-// GET /api/client/hskd/my-certification
 hskdClientRouter.get("/my-certification", async (req: Request, res: Response): Promise<void> => {
   try {
     const clientId = req.user?.userId;
@@ -104,16 +102,21 @@ hskdClientRouter.get("/my-certification", async (req: Request, res: Response): P
 
 // ─── START CERTIFICATION ──────────────────────────────────────────────────────
 
-// POST /api/client/hskd/start
 hskdClientRouter.post("/start", async (req: Request, res: Response): Promise<void> => {
+  console.log("[hskd] start body: - hskd-client.ts:106", JSON.stringify(req.body));
+  console.log("[hskd] start contenttype: - hskd-client.ts:107", req.headers["content-type"]);
+
   const parsed = industrySelectSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log("[hskd] validation failed: - hskd-client.ts:111", JSON.stringify(parsed.error.flatten()));
     res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
     return;
   }
   try {
     const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+    console.log("[hskd] looking up industry: - hskd-client.ts:119", parsed.data.industry_id);
 
     const industry = await db.execute(
       `SELECT * FROM hskd_industries WHERE id = $1 AND is_active = true`,
@@ -151,7 +154,6 @@ hskdClientRouter.post("/start", async (req: Request, res: Response): Promise<voi
 
 // ─── TRAINING ─────────────────────────────────────────────────────────────────
 
-// GET /api/client/hskd/training/:certificationId
 hskdClientRouter.get("/training/:certificationId", async (req: Request, res: Response): Promise<void> => {
   try {
     const clientId = req.user?.userId;
@@ -174,7 +176,6 @@ hskdClientRouter.get("/training/:certificationId", async (req: Request, res: Res
   }
 });
 
-// POST /api/client/hskd/training/:certificationId/complete
 hskdClientRouter.post("/training/:certificationId/complete", async (req: Request, res: Response): Promise<void> => {
   try {
     const clientId = req.user?.userId;
@@ -204,7 +205,6 @@ hskdClientRouter.post("/training/:certificationId/complete", async (req: Request
 
 // ─── SCENARIOS ────────────────────────────────────────────────────────────────
 
-// GET /api/client/hskd/scenarios/:certificationId
 hskdClientRouter.get("/scenarios/:certificationId", async (req: Request, res: Response): Promise<void> => {
   try {
     const clientId = req.user?.userId;
@@ -235,7 +235,6 @@ hskdClientRouter.get("/scenarios/:certificationId", async (req: Request, res: Re
   }
 });
 
-// POST /api/client/hskd/scenarios/:certificationId/decision
 hskdClientRouter.post("/scenarios/:certificationId/decision", async (req: Request, res: Response): Promise<void> => {
   const parsed = scenarioDecisionSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -313,7 +312,6 @@ hskdClientRouter.post("/scenarios/:certificationId/decision", async (req: Reques
 
 // ─── PROHIBITED ITEMS ─────────────────────────────────────────────────────────
 
-// GET /api/client/hskd/prohibited/:certificationId
 hskdClientRouter.get("/prohibited/:certificationId", async (req: Request, res: Response): Promise<void> => {
   try {
     const clientId = req.user?.userId;
@@ -343,7 +341,6 @@ hskdClientRouter.get("/prohibited/:certificationId", async (req: Request, res: R
   }
 });
 
-// POST /api/client/hskd/prohibited/:certificationId/confirm
 hskdClientRouter.post("/prohibited/:certificationId/confirm", async (req: Request, res: Response): Promise<void> => {
   const parsed = prohibitedConfirmSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -393,4 +390,80 @@ hskdClientRouter.post("/prohibited/:certificationId/confirm", async (req: Reques
   }
 });
 
-//
+// ─── AFFIRMATION ──────────────────────────────────────────────────────────────
+
+hskdClientRouter.post("/affirmation/:certificationId", async (req: Request, res: Response): Promise<void> => {
+  const parsed = affirmationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
+    return;
+  }
+  try {
+    const clientId = req.user?.userId;
+    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+    const cert = await db.execute(
+      `SELECT c.*, i.slug as industry_slug FROM client_certifications c
+       JOIN hskd_industries i ON i.id = c.industry_id
+       WHERE c.id = $1 AND c.client_id = $2`,
+      [req.params.certificationId, clientId]
+    );
+    if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
+    if ((cert.rows[0] as any).status !== "AFFIRMATION") {
+      res.status(400).json({ error: "Certification is not in AFFIRMATION status" });
+      return;
+    }
+
+    const d = parsed.data;
+
+    const result = await db.execute(
+      `UPDATE client_certifications SET
+        status = 'OPS_REVIEW',
+        affirmation_legal_name = $1,
+        affirmation_license_type = $2,
+        affirmation_license_number = $3,
+        affirmation_license_state = $4,
+        oncall_contact_name = $5,
+        oncall_contact_phone = $6,
+        mandatory_reporter_status = $7,
+        hipaa_baa_executed = $8,
+        hipaa_baa_date = $9,
+        affirmation_submitted_at = NOW(),
+        updated_at = NOW()
+       WHERE id = $10 RETURNING *`,
+      [
+        d.legal_name,
+        d.affirmation_license_type ?? null,
+        d.affirmation_license_number ?? null,
+        d.affirmation_license_state ?? null,
+        d.oncall_contact_name ?? null,
+        d.oncall_contact_phone ?? null,
+        d.mandatory_reporter_status ?? null,
+        d.hipaa_baa_executed ?? null,
+        d.hipaa_baa_date ?? null,
+        req.params.certificationId,
+      ]
+    );
+
+    res.json({ certification: result.rows[0] });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Failed to submit affirmation" });
+  }
+});
+
+// ─── CRISIS RESOURCES ─────────────────────────────────────────────────────────
+
+hskdClientRouter.get("/crisis-resources/:industrySlug", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await db.execute(
+      `SELECT cr.* FROM hskd_crisis_resources cr
+       JOIN hskd_industries i ON i.slug = $1
+       WHERE cr.industry_id = i.id AND cr.is_active = true
+       ORDER BY cr.priority ASC`,
+      [req.params.industrySlug]
+    );
+    res.json({ resources: result.rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Failed to fetch crisis resources" });
+  }
+});
