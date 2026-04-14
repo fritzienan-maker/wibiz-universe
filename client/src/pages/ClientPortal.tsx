@@ -112,7 +112,7 @@ function getVideoEmbedUrl(url: string): string | null {
 // ─── Cloudinary unsigned upload ───────────────────────────────────────────────
 async function uploadToCloudinary(file: File): Promise<string> {
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string;
-  const preset    = (import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string) ?? "wibiz_academy";
+  const preset    = (import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string) ?? "wibiz_universe";
   const fd = new FormData();
   fd.append("file", file);
   fd.append("upload_preset", preset);
