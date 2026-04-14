@@ -20,9 +20,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_URL = process.env.DATABASE_URL;
 if (!DB_URL) {
-  console.warn("[migrate] DATABASE_URL not set — skipping migrations");
+  console.warn("[migrate] DATABASE_URL not set  skipping migrations - migrate.ts:23");
   process.exit(0);
 }
+
+console.log("[migrate] Script version: 2.0 HSKD - migrate.ts:27");
 
 const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
   {
@@ -308,9 +310,9 @@ async function run(): Promise<void> {
   const db = drizzle(pool);
   const migrationsFolder = path.resolve(__dirname, "..", "drizzle", "migrations");
 
-  console.log("[migrate] Running drizzle-kit migrations…");
+  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:313");
   await migrate(db, { migrationsFolder });
-  console.log("[migrate] Drizzle migrations complete");
+  console.log("[migrate] Drizzle migrations complete - migrate.ts:315");
 
   if (CUSTOM_MIGRATIONS.length > 0) {
     await pool.query(`
@@ -326,7 +328,7 @@ async function run(): Promise<void> {
         [m.name]
       );
       if (rows.length > 0) {
-        console.log(`[migrate] ✓ Already applied: ${m.name}`);
+        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:331`);
         continue;
       }
       try {
@@ -335,21 +337,21 @@ async function run(): Promise<void> {
           "INSERT INTO _custom_migrations (name) VALUES ($1)",
           [m.name]
         );
-        console.log(`[migrate] ✓ Applied: ${m.name}`);
+        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:340`);
       } catch (err: any) {
-        console.error(`[migrate] ✗ Failed: ${m.name}`, err.message);
+        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:342`, err.message);
         await pool.end();
         process.exit(1);
       }
     }
   }
 
-  console.log("[migrate] Custom migrations count:", CUSTOM_MIGRATIONS.length);
+  console.log("[migrate] Custom migrations count: - migrate.ts:349", CUSTOM_MIGRATIONS.length);
   await pool.end();
-  console.log("[migrate] All migrations complete");
+  console.log("[migrate] All migrations complete - migrate.ts:351");
 }
 
 run().catch((err) => {
-  console.error("[migrate] Fatal error:", err);
+  console.error("[migrate] Fatal error: - migrate.ts:355", err);
   process.exit(1);
 });
