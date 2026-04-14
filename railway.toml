@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = "pnpm install --frozen-lockfile && pnpm build"
 
 [deploy]
-startCommand = "npx tsx scripts/migrate.ts && pnpm start"
+startCommand = "npx tsx scripts/seed-admin.ts && npx tsx scripts/migrate.ts && pnpm start"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
