@@ -6,6 +6,11 @@ import AdminPage    from "./pages/Admin";
 import InviteAccept from "./pages/InviteAccept";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Terms from "./pages/Terms";
+import HskdPage        from "./pages/Hskd";
+import HskdTraining    from "./pages/HskdTraining";
+import HskdScenarios   from "./pages/HskdScenarios";
+import HskdProhibited  from "./pages/HskdProhibited";
+import HskdAffirmation from "./pages/HskdAffirmation";
 import { apiFetch, ApiError } from "./lib/api";
 
 // ─── Auth state hook ──────────────────────────────────────────────────────────
@@ -74,6 +79,11 @@ export default function App() {
         <Route path="/invite/:token" element={<InviteAccept />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/hskd" element={<PrivateRoute><HskdPage /></PrivateRoute>} />
+<Route path="/hskd/certify/:industrySlug/training" element={<PrivateRoute><HskdTraining /></PrivateRoute>} />
+<Route path="/hskd/certify/:industrySlug/scenarios" element={<PrivateRoute><HskdScenarios /></PrivateRoute>} />
+<Route path="/hskd/certify/:industrySlug/prohibited" element={<PrivateRoute><HskdProhibited /></PrivateRoute>} />
+<Route path="/hskd/certify/:industrySlug/affirmation" element={<PrivateRoute><HskdAffirmation /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
