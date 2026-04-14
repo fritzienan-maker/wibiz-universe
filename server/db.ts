@@ -1,474 +1,685 @@
-import { Router, type Request, type Response } from "express";
-import { z } from "zod";
-import { Pool } from "pg";
-import { requireAuth } from "../_core/auth";
-import { ENV } from "../_core/env";
+// ─── Database client + all query functions (BC360 pattern: one file) ──────────
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool }    from "pg";
+import { eq, desc, asc, and } from "drizzle-orm";
+import * as schema from "../drizzle/schema";
+import type { NewUser, NewSyncEvent, NewModule } from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
+// ─── Connection ────────────────────────────────────────────────────────────────
 const pool = new Pool({
   connectionString: ENV.databaseUrl,
   ssl: ENV.isProduction ? { rejectUnauthorized: false } : undefined,
 });
 
-export const hskdClientRouter = Router();
+export const db = drizzle(pool, { schema });
 
-hskdClientRouter.use(requireAuth);
+// ─── User queries ──────────────────────────────────────────────────────────────
+export async function getUserById(id: string) {
+  const [user] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.id, id));
+  return user ?? null;
+}
 
-// ─── Schemas ──────────────────────────────────────────────────────────────────
+export async function getUserByEmail(email: string) {
+  const [user] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.email, email.toLowerCase().trim()));
+  return user ?? null;
+}
 
-const scenarioDecisionSchema = z.object({
-  decision:    z.enum(["APPROVED", "REJECTED"]),
-  client_note: z.string().optional().nullable(),
-});
+export async function getUserByGhlContactId(ghlContactId: string) {
+  const [user] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.ghlContactId, ghlContactId));
+  return user ?? null;
+}
 
-const prohibitedConfirmSchema = z.object({
-  prohibited_item_id: z.string().min(1),
-});
+export async function createUser(data: NewUser) {
+  const [user] = await db.insert(schema.users).values(data).returning();
+  return user!;
+}
 
-const affirmationSchema = z.object({
-  legal_name:                 z.string().min(1),
-  affirmation_license_type:   z.string().optional().nullable(),
-  affirmation_license_number: z.string().optional().nullable(),
-  affirmation_license_state:  z.string().optional().nullable(),
-  oncall_contact_name:        z.string().optional().nullable(),
-  oncall_contact_phone:       z.string().optional().nullable(),
-  mandatory_reporter_status:  z.boolean().optional().nullable(),
-  hipaa_baa_executed:         z.boolean().optional().nullable(),
-  hipaa_baa_date:             z.string().optional().nullable(),
-});
+export async function updateUserLastLogin(id: string) {
+  await db
+    .update(schema.users)
+    .set({ lastLoginAt: new Date(), updatedAt: new Date() })
+    .where(eq(schema.users.id, id));
+}
 
-const industrySelectSchema = z.object({
-  industry_id: z.string().min(1),
-});
+export async function updateUserPassword(id: string, passwordHash: string) {
+  await db
+    .update(schema.users)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(schema.users.id, id));
+}
 
-// ─── INDUSTRIES ───────────────────────────────────────────────────────────────
+export async function listUsers() {
+  return db
+    .select({
+      id:           schema.users.id,
+      email:        schema.users.email,
+      firstName:    schema.users.firstName,
+      lastName:     schema.users.lastName,
+      role:         schema.users.role,
+      planTier:     schema.users.planTier,
+      vertical:     schema.users.vertical,
+      isActive:     schema.users.isActive,
+      ghlContactId: schema.users.ghlContactId,
+      activatedAt:  schema.users.activatedAt,
+      lastLoginAt:  schema.users.lastLoginAt,
+      createdAt:    schema.users.createdAt,
+    })
+    .from(schema.users)
+    .orderBy(desc(schema.users.createdAt));
+}
 
-hskdClientRouter.get("/industries", async (_req: Request, res: Response): Promise<void> => {
-  try {
-    const result = await pool.query(
-      `SELECT id, slug, name, tier, description FROM hskd_industries WHERE is_active = true ORDER BY name ASC`
-    );
-    res.json({ industries: result.rows });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to fetch industries" });
+// ─── Module queries ────────────────────────────────────────────────────────────
+export async function listModules(activeOnly = false) {
+  const query = db
+    .select()
+    .from(schema.modules)
+    .orderBy(asc(schema.modules.orderIndex), asc(schema.modules.createdAt));
+  if (activeOnly) {
+    return db
+      .select()
+      .from(schema.modules)
+      .where(eq(schema.modules.isActive, true))
+      .orderBy(asc(schema.modules.orderIndex), asc(schema.modules.createdAt));
   }
-});
+  return query;
+}
 
-// ─── CERTIFICATION STATE ──────────────────────────────────────────────────────
+export async function getModuleById(id: string) {
+  const [mod] = await db
+    .select()
+    .from(schema.modules)
+    .where(eq(schema.modules.id, id));
+  return mod ?? null;
+}
 
-hskdClientRouter.get("/my-certification", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const clientId = req.user?.userId;
-    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
+export async function createModule(data: NewModule) {
+  const [mod] = await db.insert(schema.modules).values(data).returning();
+  return mod!;
+}
 
-    const result = await pool.query(
-      `SELECT c.*, i.name as industry_name, i.slug as industry_slug, i.tier
-       FROM client_certifications c
-       JOIN hskd_industries i ON i.id = c.industry_id
-       WHERE c.client_id = $1
-       ORDER BY c.created_at DESC
-       LIMIT 1`,
-      [clientId]
-    );
+export async function updateModule(id: string, data: Partial<NewModule>) {
+  const [mod] = await db
+    .update(schema.modules)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.modules.id, id))
+    .returning();
+  return mod ?? null;
+}
 
-    if (!result.rows.length) {
-      res.json({ certification: null });
-      return;
-    }
+export async function deleteModule(id: string) {
+  await db.delete(schema.modules).where(eq(schema.modules.id, id));
+}
 
-    const cert = result.rows[0] as any;
+// ─── Exercise queries ──────────────────────────────────────────────────────────
+export async function listExercisesByModule(moduleId: string, activeOnly = false) {
+  const condition = activeOnly
+    ? and(eq(schema.exercises.moduleId, moduleId), eq(schema.exercises.isActive, true))
+    : eq(schema.exercises.moduleId, moduleId);
+  return db
+    .select()
+    .from(schema.exercises)
+    .where(condition)
+    .orderBy(asc(schema.exercises.orderIndex), asc(schema.exercises.createdAt));
+}
 
-    const scenarioLogs = await pool.query(
-      `SELECT l.*, s.title as scenario_title, s.scenario_number
-       FROM certification_scenario_logs l
-       JOIN hskd_scenarios s ON s.id = l.scenario_id
-       WHERE l.certification_id = $1
-       ORDER BY l.scenario_number ASC`,
-      [cert.id]
-    );
+export async function getExerciseById(id: string) {
+  const [ex] = await db.select().from(schema.exercises).where(eq(schema.exercises.id, id));
+  return ex ?? null;
+}
 
-    const prohibitedLogs = await pool.query(
-      `SELECT l.*, p.category, p.restriction_text, p.item_number
-       FROM certification_prohibited_logs l
-       JOIN hskd_prohibited_items p ON p.id = l.prohibited_item_id
-       WHERE l.certification_id = $1
-       ORDER BY l.confirmed_at ASC`,
-      [cert.id]
-    );
+export async function createExercise(data: typeof schema.exercises.$inferInsert) {
+  const [ex] = await db.insert(schema.exercises).values(data).returning();
+  return ex!;
+}
 
-    res.json({
-      certification: cert,
-      scenario_logs: scenarioLogs.rows,
-      prohibited_logs: prohibitedLogs.rows,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to fetch certification" });
-  }
-});
+export async function updateExercise(id: string, data: Partial<typeof schema.exercises.$inferInsert>) {
+  const [ex] = await db
+    .update(schema.exercises)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.exercises.id, id))
+    .returning();
+  return ex ?? null;
+}
 
-// ─── START CERTIFICATION ──────────────────────────────────────────────────────
+export async function deleteExercise(id: string) {
+  await db.delete(schema.exercises).where(eq(schema.exercises.id, id));
+}
 
-hskdClientRouter.post("/start", async (req: Request, res: Response): Promise<void> => {
-  console.log("[hskd] start body: - db.ts:111", JSON.stringify(req.body));
+// ─── Progress queries ─────────────────────────────────────────────────────────
 
-  const parsed = industrySelectSchema.safeParse(req.body);
-  if (!parsed.success) {
-    console.log("[hskd] validation failed: - db.ts:115", JSON.stringify(parsed.error.flatten()));
-    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
-    return;
-  }
+// Returns exercise IDs with APPROVED status — used for progress counting + module gate
+export async function getApprovedExerciseIds(userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ exerciseId: schema.userProgress.exerciseId })
+    .from(schema.userProgress)
+    .where(and(
+      eq(schema.userProgress.userId, userId),
+      eq(schema.userProgress.submissionStatus, "approved"),
+    ));
+  return new Set(rows.map((r) => r.exerciseId));
+}
 
-  try {
-    const clientId = req.user?.userId;
-    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
+// Returns exercise IDs with ANY submission — used for sequential unlock chain
+export async function getSubmittedExerciseIds(userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ exerciseId: schema.userProgress.exerciseId })
+    .from(schema.userProgress)
+    .where(eq(schema.userProgress.userId, userId));
+  return new Set(rows.map((r) => r.exerciseId));
+}
 
-    console.log("[hskd] looking up industry: - db.ts:124", parsed.data.industry_id);
+// Returns all submission rows for a user keyed by exerciseId
+export async function getAllExerciseSubmissions(userId: string) {
+  const rows = await db
+    .select()
+    .from(schema.userProgress)
+    .where(eq(schema.userProgress.userId, userId));
+  return new Map(rows.map((r) => [r.exerciseId, r]));
+}
 
-    const industry = await pool.query(
-      `SELECT * FROM hskd_industries WHERE id = $1 AND is_active = true`,
-      [parsed.data.industry_id]
-    );
-    if (!industry.rows.length) {
-      res.status(404).json({ error: "Industry not found or inactive" });
-      return;
-    }
+// Submit or re-submit proof — upserts the single row per (user, exercise)
+export async function submitExerciseProof(
+  userId:       string,
+  exerciseId:   string,
+  proofText:    string,
+  proofImageUrl: string | null = null,
+) {
+  const [existing] = await db
+    .select({ id: schema.userProgress.id })
+    .from(schema.userProgress)
+    .where(and(eq(schema.userProgress.userId, userId), eq(schema.userProgress.exerciseId, exerciseId)));
 
-    const existing = await pool.query(
-      `SELECT id, status FROM client_certifications WHERE client_id = $1 AND status NOT IN ('CERTIFIED', 'REJECTED')`,
-      [clientId]
-    );
-    if (existing.rows.length) {
-      res.status(409).json({
-        error: "You already have an active certification in progress",
-        certification_id: (existing.rows[0] as any).id,
-      });
-      return;
-    }
-
-    const result = await pool.query(
-      `INSERT INTO client_certifications (client_id, industry_id, status)
-       VALUES ($1, $2, 'TRAINING')
-       RETURNING *`,
-      [clientId, parsed.data.industry_id]
-    );
-
-    res.status(201).json({ certification: result.rows[0] });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to start certification" });
-  }
-});
-
-// ─── TRAINING ─────────────────────────────────────────────────────────────────
-
-hskdClientRouter.get("/training/:certificationId", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const clientId = req.user?.userId;
-    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-    const cert = await pool.query(
-      `SELECT * FROM client_certifications WHERE id = $1 AND client_id = $2`,
-      [req.params.certificationId, clientId]
-    );
-    if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
-
-    const modules = await pool.query(
-      `SELECT * FROM hskd_training_modules WHERE industry_id = $1 AND is_active = true ORDER BY module_number ASC`,
-      [(cert.rows[0] as any).industry_id]
-    );
-
-    res.json({ modules: modules.rows });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to fetch training modules" });
-  }
-});
-
-hskdClientRouter.post("/training/:certificationId/complete", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const clientId = req.user?.userId;
-    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-    const cert = await pool.query(
-      `SELECT * FROM client_certifications WHERE id = $1 AND client_id = $2`,
-      [req.params.certificationId, clientId]
-    );
-    if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
-    if ((cert.rows[0] as any).status !== "TRAINING") {
-      res.status(400).json({ error: "Certification is not in TRAINING status" });
-      return;
-    }
-
-    const result = await pool.query(
-      `UPDATE client_certifications SET status = 'SCENARIOS', training_completed_at = NOW(), updated_at = NOW()
-       WHERE id = $1 RETURNING *`,
-      [req.params.certificationId]
-    );
-
-    res.json({ certification: result.rows[0] });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to complete training" });
-  }
-});
-
-// ─── SCENARIOS ────────────────────────────────────────────────────────────────
-
-hskdClientRouter.get("/scenarios/:certificationId", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const clientId = req.user?.userId;
-    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-    const cert = await pool.query(
-      `SELECT * FROM client_certifications WHERE id = $1 AND client_id = $2`,
-      [req.params.certificationId, clientId]
-    );
-    if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
-
-    if (!["SCENARIOS", "PROHIBITED", "AFFIRMATION", "OPS_REVIEW", "CERTIFIED"].includes((cert.rows[0] as any).status)) {
-      res.status(403).json({ error: "Training must be completed before accessing scenarios" });
-      return;
-    }
-
-    const scenarios = await pool.query(
-      `SELECT id, scenario_number, title, scenario_text, danger_text, certification_prompt
-       FROM hskd_scenarios
-       WHERE industry_id = $1 AND is_active = true
-       ORDER BY scenario_number ASC`,
-      [(cert.rows[0] as any).industry_id]
-    );
-
-    res.json({ scenarios: scenarios.rows });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to fetch scenarios" });
-  }
-});
-
-hskdClientRouter.post("/scenarios/:certificationId/decision", async (req: Request, res: Response): Promise<void> => {
-  const parsed = scenarioDecisionSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
-    return;
+  if (existing) {
+    const [row] = await db
+      .update(schema.userProgress)
+      .set({
+        proofText,
+        proofImageUrl,
+        submissionStatus: "pending_review",
+        submittedAt:      new Date(),
+        reviewedAt:       null,
+        reviewedBy:       null,
+        reviewNote:       null,
+      })
+      .where(eq(schema.userProgress.id, existing.id))
+      .returning();
+    return row!;
   }
 
-  const { scenario_id } = req.query;
-  if (!scenario_id) { res.status(400).json({ error: "scenario_id query param required" }); return; }
+  const [row] = await db
+    .insert(schema.userProgress)
+    .values({ userId, exerciseId, proofText, proofImageUrl, submissionStatus: "pending_review" })
+    .returning();
+  return row!;
+}
 
-  try {
-    const clientId = req.user?.userId;
-    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
+export async function getCompletedModuleIds(userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ moduleId: schema.userModuleCompletions.moduleId })
+    .from(schema.userModuleCompletions)
+    .where(eq(schema.userModuleCompletions.userId, userId));
+  return new Set(rows.map((r) => r.moduleId));
+}
 
-    const cert = await pool.query(
-      `SELECT * FROM client_certifications WHERE id = $1 AND client_id = $2`,
-      [req.params.certificationId, clientId]
-    );
-    if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
+export async function markModuleComplete(userId: string, moduleId: string) {
+  const existing = await db
+    .select()
+    .from(schema.userModuleCompletions)
+    .where(and(eq(schema.userModuleCompletions.userId, userId), eq(schema.userModuleCompletions.moduleId, moduleId)));
+  if (existing.length > 0) return existing[0]!;
+  const [row] = await db.insert(schema.userModuleCompletions).values({ userId, moduleId }).returning();
+  return row!;
+}
 
-    const scenario = await pool.query(
-      `SELECT * FROM hskd_scenarios WHERE id = $1`,
-      [scenario_id]
-    );
-    if (!scenario.rows.length) { res.status(404).json({ error: "Scenario not found" }); return; }
+// ─── Submission review (admin) ────────────────────────────────────────────────
 
-    await pool.query(
-      `INSERT INTO certification_scenario_logs (certification_id, scenario_id, scenario_number, decision, client_note, decided_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       ON CONFLICT (certification_id, scenario_id)
-       DO UPDATE SET decision = $4, client_note = $5, decided_at = NOW()`,
-      [
-        req.params.certificationId,
-        scenario_id,
-        (scenario.rows[0] as any).scenario_number,
-        parsed.data.decision,
-        parsed.data.client_note ?? null,
-      ]
-    );
+export async function listSubmissionsForReview(
+  status?: "pending_review" | "approved" | "rejected",
+  limit = 100,
+) {
+  const condition = status
+    ? eq(schema.userProgress.submissionStatus, status)
+    : undefined;
 
-    if (parsed.data.decision === "REJECTED") {
-      await pool.query(
-        `UPDATE client_certifications SET status = 'OPS_REVIEW', updated_at = NOW() WHERE id = $1`,
-        [req.params.certificationId]
-      );
-      res.json({ message: "Scenario flagged for ops review", status: "OPS_REVIEW" });
-      return;
-    }
+  return db
+    .select({
+      id:               schema.userProgress.id,
+      userId:           schema.userProgress.userId,
+      exerciseId:       schema.userProgress.exerciseId,
+      proofText:        schema.userProgress.proofText,
+      proofImageUrl:    schema.userProgress.proofImageUrl,
+      submissionStatus: schema.userProgress.submissionStatus,
+      submittedAt:      schema.userProgress.submittedAt,
+      reviewedAt:       schema.userProgress.reviewedAt,
+      reviewNote:       schema.userProgress.reviewNote,
+      userEmail:        schema.users.email,
+      userFirstName:    schema.users.firstName,
+      userLastName:     schema.users.lastName,
+      exerciseTitle:    schema.exercises.title,
+      exerciseDayNum:   schema.exercises.dayNumber,
+      moduleId:         schema.exercises.moduleId,
+    })
+    .from(schema.userProgress)
+    .innerJoin(schema.users,     eq(schema.userProgress.userId,     schema.users.id))
+    .innerJoin(schema.exercises, eq(schema.userProgress.exerciseId, schema.exercises.id))
+    .where(condition)
+    .orderBy(desc(schema.userProgress.submittedAt))
+    .limit(limit);
+}
 
-    const totalScenarios = await pool.query(
-      `SELECT COUNT(*) as count FROM hskd_scenarios WHERE industry_id = $1 AND is_active = true`,
-      [(cert.rows[0] as any).industry_id]
-    );
-    const approvedScenarios = await pool.query(
-      `SELECT COUNT(*) as count FROM certification_scenario_logs WHERE certification_id = $1 AND decision = 'APPROVED'`,
-      [req.params.certificationId]
-    );
+export async function reviewSubmission(
+  id:         string,
+  reviewerId: string,
+  status:     "approved" | "rejected",
+  note:       string | null = null,
+) {
+  const [row] = await db
+    .update(schema.userProgress)
+    .set({
+      submissionStatus: status,
+      reviewedAt:       new Date(),
+      reviewedBy:       reviewerId,
+      reviewNote:       note,
+    })
+    .where(eq(schema.userProgress.id, id))
+    .returning();
+  return row ?? null;
+}
 
-    const total = parseInt((totalScenarios.rows[0] as any).count);
-    const approved = parseInt((approvedScenarios.rows[0] as any).count);
+// ─── Quiz queries ─────────────────────────────────────────────────────────────
 
-    if (approved >= total) {
-      await pool.query(
-        `UPDATE client_certifications SET status = 'PROHIBITED', updated_at = NOW() WHERE id = $1`,
-        [req.params.certificationId]
-      );
-      res.json({ message: "All scenarios approved", status: "PROHIBITED" });
-    } else {
-      res.json({ message: "Scenario approved", remaining: total - approved });
-    }
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to submit scenario decision" });
+// Returns questions WITHOUT the correct answer (safe for client)
+export async function listQuizQuestionsForClient(moduleId: string) {
+  const rows = await db
+    .select({
+      id:         schema.quizQuestions.id,
+      question:   schema.quizQuestions.question,
+      options:    schema.quizQuestions.options,
+      orderIndex: schema.quizQuestions.orderIndex,
+    })
+    .from(schema.quizQuestions)
+    .where(and(eq(schema.quizQuestions.moduleId, moduleId), eq(schema.quizQuestions.isActive, true)))
+    .orderBy(asc(schema.quizQuestions.orderIndex));
+  return rows;
+}
+
+// Returns full question including correct answer (server-side only)
+export async function listQuizQuestionsWithAnswers(moduleId: string) {
+  return db
+    .select()
+    .from(schema.quizQuestions)
+    .where(and(eq(schema.quizQuestions.moduleId, moduleId), eq(schema.quizQuestions.isActive, true)))
+    .orderBy(asc(schema.quizQuestions.orderIndex));
+}
+
+// Returns the latest quiz response for a user/module pair, or null
+export async function getLatestQuizResponse(userId: string, moduleId: string) {
+  const [row] = await db
+    .select()
+    .from(schema.quizResponses)
+    .where(and(eq(schema.quizResponses.userId, userId), eq(schema.quizResponses.moduleId, moduleId)))
+    .orderBy(desc(schema.quizResponses.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function hasPassedQuiz(userId: string, moduleId: string): Promise<boolean> {
+  const latest = await getLatestQuizResponse(userId, moduleId);
+  return latest?.passed ?? false;
+}
+
+export async function saveQuizResponse(
+  userId: string,
+  moduleId: string,
+  answers: number[],
+  score: number,
+  totalQuestions: number,
+) {
+  const passed = score >= Math.ceil(totalQuestions * 0.6); // 60% to pass
+  const [row] = await db
+    .insert(schema.quizResponses)
+    .values({
+      userId,
+      moduleId,
+      answers,
+      score,
+      totalQuestions,
+      passed,
+      passedAt: passed ? new Date() : null,
+    })
+    .returning();
+  return row!;
+}
+
+// ─── DocuSeal submissions ──────────────────────────────────────────────────────
+
+export async function createDocusealSubmission(data: {
+  userId:       string;
+  documentType: string;
+  templateId:   number;
+  docusealId:   number;
+  signerEmail:  string;
+}) {
+  const [row] = await db
+    .insert(schema.docusealSubmissions)
+    .values({ ...data, status: "pending" })
+    .returning();
+  return row!;
+}
+
+export async function getDocusealSubmissionByUser(userId: string, documentType: string) {
+  const [row] = await db
+    .select()
+    .from(schema.docusealSubmissions)
+    .where(and(
+      eq(schema.docusealSubmissions.userId, userId),
+      eq(schema.docusealSubmissions.documentType, documentType),
+    ))
+    .orderBy(desc(schema.docusealSubmissions.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function markDocusealComplete(docusealId: number) {
+  await db
+    .update(schema.docusealSubmissions)
+    .set({ status: "completed", completedAt: new Date() })
+    .where(eq(schema.docusealSubmissions.docusealId, docusealId));
+}
+
+export async function markDocusealDeclined(docusealId: number) {
+  await db
+    .update(schema.docusealSubmissions)
+    .set({ status: "declined" })
+    .where(eq(schema.docusealSubmissions.docusealId, docusealId));
+}
+
+export async function listDocusealSubmissions(limit = 100) {
+  return db
+    .select({
+      id:           schema.docusealSubmissions.id,
+      userId:       schema.docusealSubmissions.userId,
+      documentType: schema.docusealSubmissions.documentType,
+      docusealId:   schema.docusealSubmissions.docusealId,
+      status:       schema.docusealSubmissions.status,
+      signerEmail:  schema.docusealSubmissions.signerEmail,
+      sentAt:       schema.docusealSubmissions.sentAt,
+      completedAt:  schema.docusealSubmissions.completedAt,
+      userEmail:    schema.users.email,
+      userFirstName: schema.users.firstName,
+      userLastName:  schema.users.lastName,
+      planTier:     schema.users.planTier,
+    })
+    .from(schema.docusealSubmissions)
+    .innerJoin(schema.users, eq(schema.docusealSubmissions.userId, schema.users.id))
+    .orderBy(desc(schema.docusealSubmissions.createdAt))
+    .limit(limit);
+}
+
+// ─── Team / staff ──────────────────────────────────────────────────────────────
+
+export async function createStaffUser(data: {
+  email:          string;
+  passwordHash:   string;
+  clientId:       string;
+  firstName:      string | null;
+  lastName:       string | null;
+  inviteToken:    string;
+  inviteExpiresAt: Date;
+}) {
+  const [user] = await db
+    .insert(schema.users)
+    .values({
+      email:           data.email.toLowerCase().trim(),
+      passwordHash:    data.passwordHash,
+      role:            "client_staff",
+      clientId:        data.clientId,
+      firstName:       data.firstName,
+      lastName:        data.lastName,
+      inviteToken:     data.inviteToken,
+      inviteExpiresAt: data.inviteExpiresAt,
+      isActive:        false,
+    })
+    .returning();
+  return user!;
+}
+
+export async function getUserByInviteToken(token: string) {
+  const [user] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.inviteToken, token));
+  return user ?? null;
+}
+
+export async function acceptInvite(userId: string, passwordHash: string) {
+  const [user] = await db
+    .update(schema.users)
+    .set({
+      passwordHash,
+      isActive:        true,
+      activatedAt:     new Date(),
+      inviteToken:     null,
+      inviteExpiresAt: null,
+      updatedAt:       new Date(),
+    })
+    .where(eq(schema.users.id, userId))
+    .returning();
+  return user!;
+}
+
+export async function listTeamMembers(clientAdminId: string) {
+  return db
+    .select({
+      id:          schema.users.id,
+      email:       schema.users.email,
+      firstName:   schema.users.firstName,
+      lastName:    schema.users.lastName,
+      isActive:    schema.users.isActive,
+      lastLoginAt: schema.users.lastLoginAt,
+      activatedAt: schema.users.activatedAt,
+      inviteToken: schema.users.inviteToken,  // non-null = still pending
+    })
+    .from(schema.users)
+    .where(eq(schema.users.clientId, clientAdminId))
+    .orderBy(asc(schema.users.createdAt));
+}
+
+export async function deactivateStaffMember(staffId: string, clientAdminId: string) {
+  await db
+    .update(schema.users)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(
+      eq(schema.users.id, staffId),
+      eq(schema.users.clientId, clientAdminId),
+    ));
+}
+
+// ─── Profile update ────────────────────────────────────────────────────────────
+export async function updateUserProfile(
+  id: string,
+  data: { firstName?: string | null; lastName?: string | null; avatarUrl?: string | null },
+) {
+  const [user] = await db
+    .update(schema.users)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.users.id, id))
+    .returning();
+  return user ?? null;
+}
+
+// ─── Re-provision user (admin override) ───────────────────────────────────────
+export async function activateExistingUser(id: string, passwordHash: string) {
+  const [user] = await db
+    .update(schema.users)
+    .set({
+      passwordHash,
+      isActive:    true,
+      activatedAt: new Date(),
+      updatedAt:   new Date(),
+    })
+    .where(eq(schema.users.id, id))
+    .returning();
+  return user ?? null;
+}
+
+// ─── Support tickets ───────────────────────────────────────────────────────────
+export async function createSupportTicket(data: {
+  userId:        string;
+  subject:       string;
+  category:      string | null;
+  message:       string;
+  priority:      string;
+  attachmentUrl: string | null;
+  ghlForwarded:  boolean;
+}) {
+  const [row] = await db
+    .insert(schema.supportTickets)
+    .values({ ...data, status: "open" })
+    .returning();
+  return row!;
+}
+
+export async function listSupportTickets(limit = 100) {
+  return db
+    .select({
+      id:            schema.supportTickets.id,
+      userId:        schema.supportTickets.userId,
+      subject:       schema.supportTickets.subject,
+      category:      schema.supportTickets.category,
+      message:       schema.supportTickets.message,
+      priority:      schema.supportTickets.priority,
+      attachmentUrl: schema.supportTickets.attachmentUrl,
+      status:        schema.supportTickets.status,
+      ghlForwarded:  schema.supportTickets.ghlForwarded,
+      createdAt:     schema.supportTickets.createdAt,
+      userEmail:     schema.users.email,
+      userFirstName: schema.users.firstName,
+      userLastName:  schema.users.lastName,
+    })
+    .from(schema.supportTickets)
+    .innerJoin(schema.users, eq(schema.supportTickets.userId, schema.users.id))
+    .orderBy(desc(schema.supportTickets.createdAt))
+    .limit(limit);
+}
+
+// ─── Webhook log ───────────────────────────────────────────────────────────────
+export async function logWebhookReceived(rawPayload: unknown) {
+  const [log] = await db
+    .insert(schema.webhookLog)
+    .values({ source: "ghl", rawPayload: rawPayload as any, processed: false })
+    .returning();
+  return log!;
+}
+
+export async function markWebhookProcessed(id: string, error?: string) {
+  await db
+    .update(schema.webhookLog)
+    .set({
+      processed: !error,
+      error:     error ?? null,
+    })
+    .where(eq(schema.webhookLog.id, id));
+}
+
+export async function listWebhookLog(limit = 100) {
+  return db
+    .select()
+    .from(schema.webhookLog)
+    .orderBy(desc(schema.webhookLog.receivedAt))
+    .limit(limit);
+}
+
+// ─── Resource queries ─────────────────────────────────────────────────────────
+
+export async function listResources(activeOnly = false) {
+  if (activeOnly) {
+    return db.select().from(schema.resources)
+      .where(eq(schema.resources.isActive, true))
+      .orderBy(asc(schema.resources.orderIndex), asc(schema.resources.createdAt));
   }
-});
+  return db.select().from(schema.resources)
+    .orderBy(asc(schema.resources.orderIndex), asc(schema.resources.createdAt));
+}
 
-// ─── PROHIBITED ITEMS ─────────────────────────────────────────────────────────
+export async function getResourceById(id: string) {
+  const [row] = await db.select().from(schema.resources).where(eq(schema.resources.id, id));
+  return row ?? null;
+}
 
-hskdClientRouter.get("/prohibited/:certificationId", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const clientId = req.user?.userId;
-    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
+export async function createResource(data: typeof schema.resources.$inferInsert) {
+  const [row] = await db.insert(schema.resources).values(data).returning();
+  return row!;
+}
 
-    const cert = await pool.query(
-      `SELECT * FROM client_certifications WHERE id = $1 AND client_id = $2`,
-      [req.params.certificationId, clientId]
-    );
-    if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
+export async function updateResource(id: string, data: Partial<typeof schema.resources.$inferInsert>) {
+  const [row] = await db
+    .update(schema.resources)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.resources.id, id))
+    .returning();
+  return row ?? null;
+}
 
-    const items = await pool.query(
-      `SELECT * FROM hskd_prohibited_items WHERE industry_id = $1 AND is_active = true ORDER BY item_number ASC`,
-      [(cert.rows[0] as any).industry_id]
-    );
+export async function deleteResource(id: string) {
+  await db.delete(schema.resources).where(eq(schema.resources.id, id));
+}
 
-    const confirmed = await pool.query(
-      `SELECT prohibited_item_id FROM certification_prohibited_logs WHERE certification_id = $1`,
-      [req.params.certificationId]
-    );
+// ─── Tutorial video queries ───────────────────────────────────────────────────
 
-    const confirmedIds = confirmed.rows.map((r: any) => r.prohibited_item_id);
-
-    res.json({ items: items.rows, confirmed_ids: confirmedIds });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to fetch prohibited items" });
+export async function listTutorialVideos(activeOnly = false) {
+  if (activeOnly) {
+    return db.select().from(schema.tutorialVideos)
+      .where(eq(schema.tutorialVideos.isActive, true))
+      .orderBy(asc(schema.tutorialVideos.orderIndex), asc(schema.tutorialVideos.createdAt));
   }
-});
+  return db.select().from(schema.tutorialVideos)
+    .orderBy(asc(schema.tutorialVideos.orderIndex), asc(schema.tutorialVideos.createdAt));
+}
 
-hskdClientRouter.post("/prohibited/:certificationId/confirm", async (req: Request, res: Response): Promise<void> => {
-  const parsed = prohibitedConfirmSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
-    return;
-  }
-  try {
-    const clientId = req.user?.userId;
-    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
+export async function getTutorialVideoById(id: string) {
+  const [row] = await db.select().from(schema.tutorialVideos).where(eq(schema.tutorialVideos.id, id));
+  return row ?? null;
+}
 
-    const cert = await pool.query(
-      `SELECT * FROM client_certifications WHERE id = $1 AND client_id = $2`,
-      [req.params.certificationId, clientId]
-    );
-    if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
+export async function createTutorialVideo(data: typeof schema.tutorialVideos.$inferInsert) {
+  const [row] = await db.insert(schema.tutorialVideos).values(data).returning();
+  return row!;
+}
 
-    await pool.query(
-      `INSERT INTO certification_prohibited_logs (certification_id, prohibited_item_id, confirmed_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (certification_id, prohibited_item_id) DO NOTHING`,
-      [req.params.certificationId, parsed.data.prohibited_item_id]
-    );
+export async function updateTutorialVideo(id: string, data: Partial<typeof schema.tutorialVideos.$inferInsert>) {
+  const [row] = await db
+    .update(schema.tutorialVideos)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.tutorialVideos.id, id))
+    .returning();
+  return row ?? null;
+}
 
-    const totalItems = await pool.query(
-      `SELECT COUNT(*) as count FROM hskd_prohibited_items WHERE industry_id = $1 AND is_active = true`,
-      [(cert.rows[0] as any).industry_id]
-    );
-    const confirmedItems = await pool.query(
-      `SELECT COUNT(*) as count FROM certification_prohibited_logs WHERE certification_id = $1`,
-      [req.params.certificationId]
-    );
+export async function deleteTutorialVideo(id: string) {
+  await db.delete(schema.tutorialVideos).where(eq(schema.tutorialVideos.id, id));
+}
 
-    const total = parseInt((totalItems.rows[0] as any).count);
-    const confirmed = parseInt((confirmedItems.rows[0] as any).count);
+// ─── Sync events ───────────────────────────────────────────────────────────────
+export async function logSyncEvent(data: NewSyncEvent) {
+  const [event] = await db.insert(schema.syncEvents).values(data).returning();
+  return event!;
+}
 
-    if (confirmed >= total) {
-      await pool.query(
-        `UPDATE client_certifications SET status = 'AFFIRMATION', updated_at = NOW() WHERE id = $1`,
-        [req.params.certificationId]
-      );
-      res.json({ message: "All prohibited items confirmed", status: "AFFIRMATION" });
-    } else {
-      res.json({ message: "Item confirmed", remaining: total - confirmed });
-    }
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to confirm prohibited item" });
-  }
-});
-
-// ─── AFFIRMATION ──────────────────────────────────────────────────────────────
-
-hskdClientRouter.post("/affirmation/:certificationId", async (req: Request, res: Response): Promise<void> => {
-  const parsed = affirmationSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
-    return;
-  }
-  try {
-    const clientId = req.user?.userId;
-    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
-
-    const cert = await pool.query(
-      `SELECT c.*, i.slug as industry_slug FROM client_certifications c
-       JOIN hskd_industries i ON i.id = c.industry_id
-       WHERE c.id = $1 AND c.client_id = $2`,
-      [req.params.certificationId, clientId]
-    );
-    if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
-    if ((cert.rows[0] as any).status !== "AFFIRMATION") {
-      res.status(400).json({ error: "Certification is not in AFFIRMATION status" });
-      return;
-    }
-
-    const d = parsed.data;
-
-    const result = await pool.query(
-      `UPDATE client_certifications SET
-        status = 'OPS_REVIEW',
-        affirmation_legal_name = $1,
-        affirmation_license_type = $2,
-        affirmation_license_number = $3,
-        affirmation_license_state = $4,
-        oncall_contact_name = $5,
-        oncall_contact_phone = $6,
-        mandatory_reporter_status = $7,
-        hipaa_baa_executed = $8,
-        hipaa_baa_date = $9,
-        affirmation_submitted_at = NOW(),
-        updated_at = NOW()
-       WHERE id = $10 RETURNING *`,
-      [
-        d.legal_name,
-        d.affirmation_license_type ?? null,
-        d.affirmation_license_number ?? null,
-        d.affirmation_license_state ?? null,
-        d.oncall_contact_name ?? null,
-        d.oncall_contact_phone ?? null,
-        d.mandatory_reporter_status ?? null,
-        d.hipaa_baa_executed ?? null,
-        d.hipaa_baa_date ?? null,
-        req.params.certificationId,
-      ]
-    );
-
-    res.json({ certification: result.rows[0] });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to submit affirmation" });
-  }
-});
-
-// ─── CRISIS RESOURCES ─────────────────────────────────────────────────────────
-
-hskdClientRouter.get("/crisis-resources/:industrySlug", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const result = await pool.query(
-      `SELECT cr.* FROM hskd_crisis_resources cr
-       JOIN hskd_industries i ON i.slug = $1
-       WHERE cr.industry_id = i.id AND cr.is_active = true
-       ORDER BY cr.priority ASC`,
-      [req.params.industrySlug]
-    );
-    res.json({ resources: result.rows });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "Failed to fetch crisis resources" });
-  }
-});
+export async function listSyncEvents(limit = 100) {
+  return db
+    .select()
+    .from(schema.syncEvents)
+    .orderBy(desc(schema.syncEvents.createdAt))
+    .limit(limit);
+}
