@@ -20,7 +20,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_URL = process.env.DATABASE_URL;
 if (!DB_URL) {
-  console.warn("[migrate] DATABASE_URL not set — skipping migrations");
+  console.warn("[migrate] DATABASE_URL not set  skipping migrations - migrate.ts:23");
   process.exit(0);
 }
 
@@ -171,6 +171,137 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
       updated_at  TIMESTAMP    DEFAULT NOW()
     )`,
   },
+  // ── HSKD ClearPath Certification (2026-04) ────────────────────────────────
+  {
+    name: "0016_hskd_industries",
+    sql: `CREATE TABLE IF NOT EXISTS hskd_industries (
+      id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      slug        VARCHAR(100) NOT NULL UNIQUE,
+      name        VARCHAR(255) NOT NULL,
+      tier        VARCHAR(20)  NOT NULL DEFAULT 'TIER_1',
+      description TEXT,
+      is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+      created_at  TIMESTAMP    DEFAULT NOW(),
+      updated_at  TIMESTAMP    DEFAULT NOW()
+    )`,
+  },
+  {
+    name: "0017_hskd_scenarios",
+    sql: `CREATE TABLE IF NOT EXISTS hskd_scenarios (
+      id                       UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+      industry_id              UUID    NOT NULL REFERENCES hskd_industries(id) ON DELETE CASCADE,
+      scenario_number          INTEGER NOT NULL,
+      title                    VARCHAR(255) NOT NULL,
+      scenario_text            TEXT,
+      danger_text              TEXT,
+      prescribed_bot_response  TEXT,
+      mandatory_bot_action     TEXT,
+      certification_prompt     TEXT,
+      ops_note                 TEXT,
+      is_active                BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at               TIMESTAMP DEFAULT NOW(),
+      updated_at               TIMESTAMP DEFAULT NOW(),
+      UNIQUE(industry_id, scenario_number)
+    )`,
+  },
+  {
+    name: "0018_hskd_prohibited_items",
+    sql: `CREATE TABLE IF NOT EXISTS hskd_prohibited_items (
+      id               UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+      industry_id      UUID    NOT NULL REFERENCES hskd_industries(id) ON DELETE CASCADE,
+      item_number      INTEGER NOT NULL,
+      category         VARCHAR(255),
+      restriction_text TEXT,
+      is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at       TIMESTAMP DEFAULT NOW(),
+      updated_at       TIMESTAMP DEFAULT NOW(),
+      UNIQUE(industry_id, item_number)
+    )`,
+  },
+  {
+    name: "0019_hskd_training_modules",
+    sql: `CREATE TABLE IF NOT EXISTS hskd_training_modules (
+      id            UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+      industry_id   UUID    NOT NULL REFERENCES hskd_industries(id) ON DELETE CASCADE,
+      module_number INTEGER NOT NULL,
+      title         VARCHAR(255) NOT NULL,
+      content       TEXT,
+      video_url     TEXT,
+      is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at    TIMESTAMP DEFAULT NOW(),
+      updated_at    TIMESTAMP DEFAULT NOW(),
+      UNIQUE(industry_id, module_number)
+    )`,
+  },
+  {
+    name: "0020_client_certifications",
+    sql: `CREATE TABLE IF NOT EXISTS client_certifications (
+      id                           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      client_id                    UUID        NOT NULL,
+      industry_id                  UUID        NOT NULL REFERENCES hskd_industries(id),
+      status                       VARCHAR(50) NOT NULL DEFAULT 'TRAINING',
+      training_completed_at        TIMESTAMP,
+      affirmation_legal_name       VARCHAR(255),
+      affirmation_license_type     VARCHAR(255),
+      affirmation_license_number   VARCHAR(255),
+      affirmation_license_state    VARCHAR(100),
+      affirmation_submitted_at     TIMESTAMP,
+      oncall_contact_name          VARCHAR(255),
+      oncall_contact_phone         VARCHAR(50),
+      mandatory_reporter_status    BOOLEAN,
+      hipaa_baa_executed           BOOLEAN,
+      hipaa_baa_date               VARCHAR(50),
+      ops_signoff_by               VARCHAR(255),
+      ops_signoff_at               TIMESTAMP,
+      specialist_mode_activated_at TIMESTAMP,
+      certificate_id               VARCHAR(100),
+      kb_review_due_at             TIMESTAMP,
+      tier0_monitoring_start_at    TIMESTAMP,
+      created_at                   TIMESTAMP   DEFAULT NOW(),
+      updated_at                   TIMESTAMP   DEFAULT NOW()
+    )`,
+  },
+  {
+    name: "0021_certification_scenario_logs",
+    sql: `CREATE TABLE IF NOT EXISTS certification_scenario_logs (
+      id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      certification_id UUID        NOT NULL REFERENCES client_certifications(id) ON DELETE CASCADE,
+      scenario_id      UUID        NOT NULL REFERENCES hskd_scenarios(id),
+      scenario_number  INTEGER     NOT NULL,
+      decision         VARCHAR(20) NOT NULL,
+      client_note      TEXT,
+      decided_at       TIMESTAMP   DEFAULT NOW(),
+      UNIQUE(certification_id, scenario_id)
+    )`,
+  },
+  {
+    name: "0022_certification_prohibited_logs",
+    sql: `CREATE TABLE IF NOT EXISTS certification_prohibited_logs (
+      id                 UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
+      certification_id   UUID      NOT NULL REFERENCES client_certifications(id) ON DELETE CASCADE,
+      prohibited_item_id UUID      NOT NULL REFERENCES hskd_prohibited_items(id),
+      confirmed_at       TIMESTAMP DEFAULT NOW(),
+      UNIQUE(certification_id, prohibited_item_id)
+    )`,
+  },
+  {
+    name: "0023_hskd_crisis_resources",
+    sql: `CREATE TABLE IF NOT EXISTS hskd_crisis_resources (
+      id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      industry_id UUID         NOT NULL REFERENCES hskd_industries(id) ON DELETE CASCADE,
+      name        VARCHAR(255) NOT NULL,
+      phone       VARCHAR(50),
+      description TEXT,
+      url         TEXT,
+      priority    INTEGER      NOT NULL DEFAULT 0,
+      is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+      created_at  TIMESTAMP    DEFAULT NOW()
+    )`,
+  },
+  {
+    name: "0024_users_hskd_required",
+    sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS hskd_required BOOLEAN NOT NULL DEFAULT FALSE`,
+  },
 ];
 
 async function run(): Promise<void> {
@@ -185,9 +316,9 @@ async function run(): Promise<void> {
   const db = drizzle(pool);
   const migrationsFolder = path.resolve(__dirname, "..", "drizzle", "migrations");
 
-  console.log("[migrate] Running drizzle-kit migrations…");
+  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:319");
   await migrate(db, { migrationsFolder });
-  console.log("[migrate] Drizzle migrations complete");
+  console.log("[migrate] Drizzle migrations complete - migrate.ts:321");
 
   // 2. Run custom migrations
   if (CUSTOM_MIGRATIONS.length > 0) {
@@ -204,7 +335,7 @@ async function run(): Promise<void> {
         [m.name]
       );
       if (rows.length > 0) {
-        console.log(`[migrate] ✓ Already applied: ${m.name}`);
+        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:338`);
         continue;
       }
       try {
@@ -213,9 +344,9 @@ async function run(): Promise<void> {
           "INSERT INTO _custom_migrations (name) VALUES ($1)",
           [m.name]
         );
-        console.log(`[migrate] ✓ Applied: ${m.name}`);
+        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:347`);
       } catch (err: any) {
-        console.error(`[migrate] ✗ Failed: ${m.name}`, err.message);
+        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:349`, err.message);
         await pool.end();
         process.exit(1);
       }
@@ -223,10 +354,10 @@ async function run(): Promise<void> {
   }
 
   await pool.end();
-  console.log("[migrate] All migrations complete");
+  console.log("[migrate] All migrations complete - migrate.ts:357");
 }
 
 run().catch((err) => {
-  console.error("[migrate] Fatal error:", err);
+  console.error("[migrate] Fatal error: - migrate.ts:361", err);
   process.exit(1);
 });
