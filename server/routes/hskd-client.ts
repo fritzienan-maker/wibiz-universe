@@ -56,7 +56,7 @@ hskdClientRouter.get("/industries", async (_req: Request, res: Response): Promis
 // Returns the current client's active certification (or null)
 hskdClientRouter.get("/my-certification", async (req: Request, res: Response): Promise<void> => {
   try {
-    const clientId = (req as any).user?.id;
+    const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
     const result = await db.execute(
@@ -117,7 +117,7 @@ hskdClientRouter.post("/start", async (req: Request, res: Response): Promise<voi
     return;
   }
   try {
-    const clientId = (req as any).user?.id;
+    const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
     // Check industry exists and is active
@@ -160,7 +160,7 @@ hskdClientRouter.post("/start", async (req: Request, res: Response): Promise<voi
 // Returns training modules for the client's selected industry
 hskdClientRouter.get("/training/:certificationId", async (req: Request, res: Response): Promise<void> => {
   try {
-    const clientId = (req as any).user?.id;
+    const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
     const cert = await db.execute(
@@ -184,7 +184,7 @@ hskdClientRouter.get("/training/:certificationId", async (req: Request, res: Res
 // Client marks training as complete — unlocks scenarios
 hskdClientRouter.post("/training/:certificationId/complete", async (req: Request, res: Response): Promise<void> => {
   try {
-    const clientId = (req as any).user?.id;
+    const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
     const cert = await db.execute(
@@ -215,7 +215,7 @@ hskdClientRouter.post("/training/:certificationId/complete", async (req: Request
 // Returns scenarios for the client's industry
 hskdClientRouter.get("/scenarios/:certificationId", async (req: Request, res: Response): Promise<void> => {
   try {
-    const clientId = (req as any).user?.id;
+    const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
     const cert = await db.execute(
@@ -256,7 +256,7 @@ hskdClientRouter.post("/scenarios/:certificationId/decision", async (req: Reques
   if (!scenario_id) { res.status(400).json({ error: "scenario_id query param required" }); return; }
 
   try {
-    const clientId = (req as any).user?.id;
+    const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
     const cert = await db.execute(
@@ -328,7 +328,7 @@ hskdClientRouter.post("/scenarios/:certificationId/decision", async (req: Reques
 // GET /api/client/hskd/prohibited/:certificationId
 hskdClientRouter.get("/prohibited/:certificationId", async (req: Request, res: Response): Promise<void> => {
   try {
-    const clientId = (req as any).user?.id;
+    const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
     const cert = await db.execute(
@@ -363,7 +363,7 @@ hskdClientRouter.post("/prohibited/:certificationId/confirm", async (req: Reques
     return;
   }
   try {
-    const clientId = (req as any).user?.id;
+    const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
     const cert = await db.execute(
@@ -417,7 +417,7 @@ hskdClientRouter.post("/affirmation/:certificationId", async (req: Request, res:
     return;
   }
   try {
-    const clientId = (req as any).user?.id;
+    const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
     const cert = await db.execute(
