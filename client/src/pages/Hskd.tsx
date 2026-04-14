@@ -36,10 +36,14 @@ export default function HskdPage() {
   }, [navigate]);
 
   const handleBegin = async (industry: Industry) => {
+    if (!industry.id) {
+      setError("Invalid industry selected. Please refresh and try again.");
+      return;
+    }
     setStarting(industry.id);
     setError("");
     try {
-      const res = await apiFetch<{ certification: { id: string } }>("/client/hskd/start", {
+      await apiFetch<{ certification: { id: string } }>("/client/hskd/start", {
         method: "POST",
         body: JSON.stringify({ industry_id: industry.id }),
       });
@@ -47,7 +51,6 @@ export default function HskdPage() {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 409) {
-          // Already has active certification — just navigate
           navigate(`/hskd/certify/${industry.slug}/training`);
         } else {
           setError(err.message ?? "Failed to start certification. Please try again.");
@@ -78,7 +81,6 @@ export default function HskdPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-        {/* Header */}
         <div className="bg-card rounded-2xl border border-border p-6">
           <h1 className="text-2xl font-bold text-foreground">ClearPath Certification</h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -93,7 +95,6 @@ export default function HskdPage() {
           </div>
         )}
 
-        {/* Industry Cards */}
         <div>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
             Select Your Industry
@@ -109,7 +110,6 @@ export default function HskdPage() {
                   key={industry.id}
                   className="bg-card rounded-xl border border-border p-5 space-y-3"
                 >
-                  {/* Tier badge */}
                   <div className="flex items-center justify-between">
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
@@ -146,14 +146,12 @@ export default function HskdPage() {
                     )}
                   </div>
 
-                  {/* TIER 0 warning */}
                   {isTier0 && (
                     <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2 text-xs text-destructive font-medium">
                       ⚠ TIER 0: Highest Risk — Pro Plan Required
                     </div>
                   )}
 
-                  {/* Action button */}
                   {cert?.status === "CERTIFIED" ? (
                     <Link
                       to={`/hskd/certify/${industry.slug}/status`}
