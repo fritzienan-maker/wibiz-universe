@@ -72,7 +72,7 @@ interface QuizState {
   lastAttempt: { score: number; totalQuestions: number; passed: boolean; passedAt: string | null } | null;
 }
 
-type Tab = "dashboard" | "programme" | "team" | "resources" | "support" | "account";
+type Tab = "dashboard" | "programme" | "team" | "resources" | "support" | "account" | "hskd";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function initials(first: string | null, last: string | null, email: string) {
@@ -149,7 +149,6 @@ function ExerciseProofForm({
   const isRejected = status === "rejected";
   const hasSubmission = status !== null;
 
-  // Keep form in sync if parent reloads data
   useEffect(() => {
     setProofText(exercise.proofText ?? "");
     setImageUrl(exercise.proofImageUrl ?? "");
@@ -203,7 +202,6 @@ function ExerciseProofForm({
 
       {open && (
         <div className="p-proof-form">
-          {/* Video embed */}
           {exercise.videoUrl && (
             <div className="p-video-wrap">
               {embedUrl ? (
@@ -225,7 +223,6 @@ function ExerciseProofForm({
             <div className="p-proof-desc">{exercise.description}</div>
           )}
 
-          {/* Status row */}
           <div className="p-sub-status-row">
             {isApproved && <span className="p-badge b-done">Approved</span>}
             {isPending  && <span className="p-badge b-pend">Pending Review</span>}
@@ -233,14 +230,12 @@ function ExerciseProofForm({
             {!hasSubmission && <span style={{ fontSize: 12, color: "var(--ts)" }}>Not yet submitted</span>}
           </div>
 
-          {/* Rejection feedback */}
           {isRejected && exercise.reviewNote && (
             <div className="p-reject-note">
               <strong>Staff feedback:</strong> {exercise.reviewNote}
             </div>
           )}
 
-          {/* Screenshot preview */}
           {imageUrl && (
             <div className="p-img-preview">
               <img src={imageUrl} alt="Proof screenshot" />
@@ -248,7 +243,6 @@ function ExerciseProofForm({
             </div>
           )}
 
-          {/* Proof text */}
           {exercise.proofPrompt && (
             <label className="p-proof-label">{exercise.proofPrompt}</label>
           )}
@@ -260,7 +254,6 @@ function ExerciseProofForm({
             onChange={(e) => { setProofText(e.target.value); setError(""); }}
           />
 
-          {/* Screenshot upload (only shown if Cloudinary is configured) */}
           {cloudName && (
             <div className="p-img-upload-row">
               <label className="p-img-upload-btn">
@@ -548,15 +541,15 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
             </div>
 
             {user.hskdRequired && (
-              <div className="p-ci">
+              <div className="p-ci" onClick={() => onTabChange("hskd")} style={{ cursor: "pointer" }}>
                 <div className="p-ci-icon ic-hskd">H</div>
                 <div className="p-ci-info">
-                  <div className="p-ci-name">HSKD Liability Sign-Off</div>
+                  <div className="p-ci-name">HSKD ClearPath Certification</div>
                   <div className="p-ci-meta">
-                    5 scenarios · {capitalize(user.vertical)} · DocuSeal required
+                    5 industries · Scenarios · Affirmation · Certificate
                   </div>
                 </div>
-                <span className="p-badge b-lock">Locked</span>
+                <span className="p-badge b-lock">Start</span>
               </div>
             )}
 
@@ -609,32 +602,14 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
               </div>
               <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
             </div>
-            {user.hskdRequired && (
-              <div className="p-cert-item">
-                <div className="p-cert-icon cl">H</div>
-                <div className="p-cert-info">
-                  <div className="p-cert-name">HSKD Liability Sign-Off</div>
-                  <div className="p-cert-sub">5 scenarios · DocuSeal required</div>
-                </div>
-                <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
-              </div>
-            )}
-            <div className="p-cert-item">
+            <div className="p-cert-item" onClick={() => onTabChange("hskd")} style={{ cursor: "pointer" }}>
               <div className="p-cert-icon cl">C</div>
               <div className="p-cert-info">
-                <div className="p-cert-name">ClearPath Certificate</div>
-                <div className="p-cert-sub">Issued when all gates pass</div>
+                <div className="p-cert-name">ClearPath Certification</div>
+                <div className="p-cert-sub">HSKD · 5 industries · Issued after ops sign-off</div>
               </div>
               <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
             </div>
-            {user.hskdRequired && (
-              <div className="p-adobe-note">
-                <span style={{ fontSize: "14px" }}>✍</span>
-                <span className="p-an-text">
-                  HSKD sign-off requires formal approval via DocuSeal. All 5 scenarios must be confirmed before the document is issued.
-                </span>
-              </div>
-            )}
           </div>
 
           <div className="p-card">
@@ -736,7 +711,6 @@ function TabProgramme({
                       />
                     ))}
 
-                    {/* Quiz section — appears after all exercises are submitted (pending OK) */}
                     {mod.allExercisesSubmitted && !mod.gateSubmitted && (
                       <div style={{ marginTop: 16 }}>
                         <QuizPanel
@@ -746,7 +720,6 @@ function TabProgramme({
                       </div>
                     )}
 
-                    {/* Gate sign-off — only after all exercises approved + quiz passed */}
                     {mod.allExercisesDone && mod.quizPassed && !mod.gateSubmitted && (
                       <div className="p-gate-box" style={{ marginTop: 12 }}>
                         <div>
@@ -777,7 +750,6 @@ function TabProgramme({
           })}
         </div>
 
-        {/* Sidebar */}
         <div>
           <div className="p-card">
             <div className="p-card-title">Module Gates</div>
@@ -910,7 +882,7 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
       await apiFetch(`/team/${memberId}`, { method: "DELETE" });
       await loadTeam();
     } catch {
-      // ignore, reload anyway
+      // ignore
     } finally {
       setRemoving(null);
     }
@@ -926,7 +898,6 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
         <p>Invite staff members to join your WiBiz Universe portal. Track their programme progress below.</p>
       </div>
 
-      {/* Invite form card */}
       <div className="p-card" style={{ maxWidth: 700, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showInvite ? 16 : 0 }}>
           <div className="p-card-title" style={{ margin: 0, padding: 0, border: "none" }}>Invite a Staff Member</div>
@@ -946,10 +917,8 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
                 <div style={{ fontSize: 11, background: "var(--s1)", padding: "6px 10px", borderRadius: 6, wordBreak: "break-all", color: "var(--b400)", fontFamily: "monospace" }}>
                   {invitedUrl}
                 </div>
-                <button
-                  style={{ marginTop: 10, fontSize: 11, color: "var(--ts)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                  onClick={() => { navigator.clipboard.writeText(invitedUrl); }}
-                >
+                <button style={{ marginTop: 10, fontSize: 11, color: "var(--ts)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                  onClick={() => { navigator.clipboard.writeText(invitedUrl); }}>
                   Copy link
                 </button>
               </div>
@@ -959,35 +928,19 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>First name</label>
-                  <input
-                    type="text"
-                    value={invFirst}
-                    onChange={(e) => setInvFirst(e.target.value)}
-                    placeholder="Optional"
-                    style={{ width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" }}
-                  />
+                  <input type="text" value={invFirst} onChange={(e) => setInvFirst(e.target.value)} placeholder="Optional"
+                    style={{ width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" }} />
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Last name</label>
-                  <input
-                    type="text"
-                    value={invLast}
-                    onChange={(e) => setInvLast(e.target.value)}
-                    placeholder="Optional"
-                    style={{ width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" }}
-                  />
+                  <input type="text" value={invLast} onChange={(e) => setInvLast(e.target.value)} placeholder="Optional"
+                    style={{ width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" }} />
                 </div>
               </div>
               <div style={{ marginBottom: 10 }}>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Email address <span style={{ color: "var(--r-t)" }}>*</span></label>
-                <input
-                  type="email"
-                  value={invEmail}
-                  onChange={(e) => { setInvEmail(e.target.value); setInviteErr(""); }}
-                  placeholder="staff@yourbusiness.com"
-                  required
-                  style={{ width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" }}
-                />
+                <input type="email" value={invEmail} onChange={(e) => { setInvEmail(e.target.value); setInviteErr(""); }} placeholder="staff@yourbusiness.com" required
+                  style={{ width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" }} />
               </div>
               {inviteErr && (
                 <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>
@@ -1005,10 +958,8 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
         )}
       </div>
 
-      {/* Team table */}
       <div className="p-card" style={{ maxWidth: 700 }}>
         <div className="p-card-title">Staff Members</div>
-
         {loading ? (
           <div style={{ fontSize: 13, color: "var(--ts)", padding: "12px 0" }}>Loading team…</div>
         ) : teamError ? (
@@ -1024,7 +975,6 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
               </tr>
             </thead>
             <tbody>
-              {/* Self row */}
               <tr>
                 <td>
                   <div className="p-mem-cell">
@@ -1039,7 +989,6 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
                 <td><span className="p-badge b-done">Active</span></td>
                 <td />
               </tr>
-
               {team.length === 0 && (
                 <tr>
                   <td colSpan={4} style={{ fontSize: 12, color: "var(--ts)", paddingTop: 10, paddingBottom: 4 }}>
@@ -1047,7 +996,6 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
                   </td>
                 </tr>
               )}
-
               {team.map((m) => {
                 const name = [m.firstName, m.lastName].filter(Boolean).join(" ") || m.email;
                 const av   = initials(m.firstName, m.lastName, m.email);
@@ -1084,12 +1032,8 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
                     </td>
                     <td style={{ textAlign: "right" }}>
                       {m.isActive && (
-                        <button
-                          className="p-btn-ghost"
-                          style={{ fontSize: 11, padding: "3px 8px", color: "var(--r-t)" }}
-                          disabled={removing === m.id}
-                          onClick={() => deactivate(m.id)}
-                        >
+                        <button className="p-btn-ghost" style={{ fontSize: 11, padding: "3px 8px", color: "var(--r-t)" }}
+                          disabled={removing === m.id} onClick={() => deactivate(m.id)}>
                           {removing === m.id ? "…" : "Deactivate"}
                         </button>
                       )}
@@ -1107,28 +1051,24 @@ function TabTeam({ user }: { user: DashboardData["user"] }) {
 
 // ─── Support tab ──────────────────────────────────────────────────────────────
 const SUPPORT_CATEGORIES = [
-  "General question",
-  "Technical issue",
-  "Billing / account",
-  "Programme / exercises",
-  "Platform access",
-  "Other",
+  "General question", "Technical issue", "Billing / account",
+  "Programme / exercises", "Platform access", "Other",
 ];
 
 function TabSupport({ user }: { user: DashboardData["user"] }) {
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "";
-  const [subject,       setSubject]       = useState("");
-  const [category,      setCategory]      = useState("");
-  const [message,       setMessage]       = useState("");
-  const [priority,      setPriority]      = useState<"low" | "normal" | "high">("normal");
-  const [attachUrl,     setAttachUrl]     = useState("");
-  const [uploading,     setUploading]     = useState(false);
-  const [uploadErr,     setUploadErr]     = useState("");
-  const [submitting,    setSubmitting]    = useState(false);
-  const [submitErr,     setSubmitErr]     = useState("");
-  const [submitted,     setSubmitted]     = useState(false);
-
+  const [subject, setSubject]       = useState("");
+  const [category, setCategory]     = useState("");
+  const [message, setMessage]       = useState("");
+  const [priority, setPriority]     = useState<"low" | "normal" | "high">("normal");
+  const [attachUrl, setAttachUrl]   = useState("");
+  const [uploading, setUploading]   = useState(false);
+  const [uploadErr, setUploadErr]   = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitErr, setSubmitErr]   = useState("");
+  const [submitted, setSubmitted]   = useState(false);
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
+  const inputStyle: React.CSSProperties = { width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1136,234 +1076,70 @@ function TabSupport({ user }: { user: DashboardData["user"] }) {
     if (file.size > 5 * 1024 * 1024) { setUploadErr("File must be under 5 MB."); return; }
     const allowed = ["image/png", "image/jpeg", "image/gif", "image/webp"];
     if (!allowed.includes(file.type)) { setUploadErr("Images only (PNG, JPG, GIF, WEBP)."); return; }
-    setUploadErr("");
-    setUploading(true);
-    try {
-      const url = await uploadToCloudinary(file);
-      setAttachUrl(url);
-    } catch {
-      setUploadErr("Upload failed. Please try again.");
-    } finally {
-      setUploading(false);
-    }
+    setUploadErr(""); setUploading(true);
+    try { const url = await uploadToCloudinary(file); setAttachUrl(url); }
+    catch { setUploadErr("Upload failed. Please try again."); }
+    finally { setUploading(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitErr("");
+    e.preventDefault(); setSubmitErr("");
     if (!subject.trim()) { setSubmitErr("Please enter a subject."); return; }
     if (!message.trim()) { setSubmitErr("Please describe your issue."); return; }
     setSubmitting(true);
     try {
-      await apiFetch("/support/ticket", {
-        method: "POST",
-        body: JSON.stringify({
-          subject:       subject.trim(),
-          category:      category || null,
-          message:       message.trim(),
-          priority,
-          attachmentUrl: attachUrl || null,
-        }),
-      });
+      await apiFetch("/support/ticket", { method: "POST", body: JSON.stringify({ subject: subject.trim(), category: category || null, message: message.trim(), priority, attachmentUrl: attachUrl || null }) });
       setSubmitted(true);
-    } catch (err) {
-      setSubmitErr(err instanceof ApiError ? err.message : "Failed to submit. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) { setSubmitErr(err instanceof ApiError ? err.message : "Failed to submit. Please try again."); }
+    finally { setSubmitting(false); }
   };
 
-  const reset = () => {
-    setSubject(""); setCategory(""); setMessage(""); setPriority("normal");
-    setAttachUrl(""); setUploadErr(""); setSubmitErr(""); setSubmitted(false);
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)",
-    borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)",
-    fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box",
-  };
+  const reset = () => { setSubject(""); setCategory(""); setMessage(""); setPriority("normal"); setAttachUrl(""); setUploadErr(""); setSubmitErr(""); setSubmitted(false); };
 
   return (
     <>
-      <div className="p-greet">
-        <h2>Get Support</h2>
-        <p>Submit a support request and our team will get back to you. You can also browse our support articles for instant answers.</p>
-      </div>
-
+      <div className="p-greet"><h2>Get Support</h2><p>Submit a support request and our team will get back to you.</p></div>
       <div className="p-two-col">
         <div>
-          {/* Ticket form */}
           <div className="p-card">
             <div className="p-card-title">Submit a Support Ticket</div>
-            <div style={{ fontSize: 12, color: "var(--ts)", marginBottom: 16 }}>
-              Describe your issue below. Our team reviews tickets and responds by email.
-            </div>
-
             {submitted ? (
               <div style={{ background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "20px 16px", textAlign: "center" }}>
                 <div style={{ fontSize: 22, marginBottom: 8 }}>✓</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--g-t)", marginBottom: 6 }}>Ticket submitted successfully</div>
-                <div style={{ fontSize: 12, color: "var(--ts)", marginBottom: 16 }}>
-                  We will respond to <strong>{user.email}</strong> as soon as possible.
-                </div>
-                <button className="p-btn p-btn-blue" style={{ fontSize: 12 }} onClick={reset}>
-                  Submit another ticket
-                </button>
+                <div style={{ fontSize: 12, color: "var(--ts)", marginBottom: 16 }}>We will respond to <strong>{user.email}</strong> as soon as possible.</div>
+                <button className="p-btn p-btn-blue" style={{ fontSize: 12 }} onClick={reset}>Submit another ticket</button>
               </div>
             ) : (
               <form onSubmit={handleSubmit}>
-                {/* Pre-filled user info (read-only) */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Your name</label>
-                    <input type="text" value={displayName} readOnly style={{ ...inputStyle, opacity: 0.6, cursor: "default" }} />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Email</label>
-                    <input type="email" value={user.email} readOnly style={{ ...inputStyle, opacity: 0.6, cursor: "default" }} />
-                  </div>
+                  <div><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Your name</label><input type="text" value={displayName} readOnly style={{ ...inputStyle, opacity: 0.6, cursor: "default" }} /></div>
+                  <div><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Email</label><input type="email" value={user.email} readOnly style={{ ...inputStyle, opacity: 0.6, cursor: "default" }} /></div>
                 </div>
-
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
-                    Subject <span style={{ color: "var(--r-t)" }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="Brief description of your issue"
-                    required
-                    style={inputStyle}
-                  />
-                </div>
-
+                <div style={{ marginBottom: 10 }}><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Subject <span style={{ color: "var(--r-t)" }}>*</span></label><input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Brief description of your issue" required style={inputStyle} /></div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Category</label>
-                    <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
-                      <option value="">Select a category…</option>
-                      {SUPPORT_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Priority</label>
-                    <select value={priority} onChange={(e) => setPriority(e.target.value as "low" | "normal" | "high")} style={inputStyle}>
-                      <option value="low">Low</option>
-                      <option value="normal">Normal</option>
-                      <option value="high">High — urgent issue</option>
-                    </select>
-                  </div>
+                  <div><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Category</label><select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}><option value="">Select a category…</option>{SUPPORT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Priority</label><select value={priority} onChange={(e) => setPriority(e.target.value as "low" | "normal" | "high")} style={inputStyle}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High — urgent issue</option></select></div>
                 </div>
-
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
-                    Message <span style={{ color: "var(--r-t)" }}>*</span>
-                  </label>
-                  <textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Describe your issue in detail. Include any error messages or steps to reproduce."
-                    rows={5}
-                    required
-                    style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
-                  />
-                </div>
-
-                {cloudName && (
-                  <div style={{ marginBottom: 10 }}>
-                    <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
-                      Screenshot (optional)
-                    </label>
-                    {attachUrl ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <img src={attachUrl} alt="Attachment preview" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 6, border: "1px solid var(--bdr)" }} />
-                        <div>
-                          <div style={{ fontSize: 11, color: "var(--g-t)", marginBottom: 4 }}>Uploaded</div>
-                          <button type="button" style={{ fontSize: 11, color: "var(--ts)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }} onClick={() => setAttachUrl("")}>
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={uploading}
-                        onChange={handleFileChange}
-                        style={{ fontSize: 12, color: "var(--ts)" }}
-                      />
-                    )}
-                    {uploading && <div style={{ fontSize: 11, color: "var(--ts)", marginTop: 4 }}>Uploading…</div>}
-                    {uploadErr && <div style={{ fontSize: 11, color: "var(--r-t)", marginTop: 4 }}>{uploadErr}</div>}
-                  </div>
-                )}
-
-                {submitErr && (
-                  <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>
-                    {submitErr}
-                  </div>
-                )}
-
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button type="submit" className="p-btn p-btn-blue" disabled={submitting || uploading}>
-                    {submitting ? "Submitting…" : "Submit Ticket →"}
-                  </button>
-                </div>
+                <div style={{ marginBottom: 10 }}><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Message <span style={{ color: "var(--r-t)" }}>*</span></label><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Describe your issue in detail." rows={5} required style={{ ...inputStyle, resize: "vertical", minHeight: 100 }} /></div>
+                {submitErr && <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>{submitErr}</div>}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}><button type="submit" className="p-btn p-btn-blue" disabled={submitting || uploading}>{submitting ? "Submitting…" : "Submit Ticket →"}</button></div>
               </form>
             )}
           </div>
         </div>
-
         <div>
-          {/* Support articles */}
           <div className="p-card">
             <div className="p-card-title">Support Articles</div>
-            <div style={{ fontSize: 12, color: "var(--ts)", marginBottom: 14 }}>
-              Browse our knowledge base for instant answers to common questions.
-            </div>
-            <a
-              href="https://start.wibiz.ai/support/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "block", textDecoration: "none" }}
-            >
+            <a href="https://start.wibiz.ai/support/" target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "12px 14px", cursor: "pointer", marginBottom: 10 }}>
                 <div style={{ width: 34, height: 34, borderRadius: 8, background: "var(--b200)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#fff", flexShrink: 0 }}>?</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--b400)", marginBottom: 2 }}>Browse WiBiz Support Articles</div>
-                  <div style={{ fontSize: 11, color: "var(--ts)" }}>Step-by-step guides, troubleshooting, platform walkthroughs</div>
-                </div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: "var(--b400)", marginBottom: 2 }}>Browse WiBiz Support Articles</div><div style={{ fontSize: 11, color: "var(--ts)" }}>Step-by-step guides, troubleshooting, platform walkthroughs</div></div>
                 <span style={{ fontSize: 14, color: "var(--ts)" }}>↗</span>
               </div>
             </a>
-            <div style={{ fontSize: 11, color: "var(--ts)", padding: "4px 2px" }}>
-              Can't find what you need? Use the form on the left to submit a ticket and our team will help.
-            </div>
           </div>
-
-          {/* What to expect */}
-          <div className="p-card">
-            <div className="p-card-title">What happens next?</div>
-            <div className="p-ql"><div className="p-ql-dot" />Your ticket is sent to our support team</div>
-            <div className="p-ql"><div className="p-ql-dot" />We reply to your email address</div>
-            <div className="p-ql"><div className="p-ql-dot" />High priority tickets are handled first</div>
-            <div className="p-ql"><div className="p-ql-dot" />You can submit multiple tickets any time</div>
-          </div>
-
-          {/* Direct contact */}
-          <div className="p-card">
-            <div className="p-card-title">Direct Contact</div>
-            <div style={{ fontSize: 13, color: "var(--tp)", marginBottom: 6 }}>
-              Email: <a href="mailto:support@wibiz.ai" style={{ color: "var(--b400)", textDecoration: "none" }}>support@wibiz.ai</a>
-            </div>
-            <div style={{ fontSize: 11, color: "var(--ts)" }}>
-              For urgent issues, email us directly. For general questions, the ticket form above is the fastest way to get help.
-            </div>
-          </div>
+          <div className="p-card"><div className="p-card-title">Direct Contact</div><div style={{ fontSize: 13, color: "var(--tp)", marginBottom: 6 }}>Email: <a href="mailto:support@wibiz.ai" style={{ color: "var(--b400)", textDecoration: "none" }}>support@wibiz.ai</a></div></div>
         </div>
       </div>
     </>
@@ -1372,226 +1148,91 @@ function TabSupport({ user }: { user: DashboardData["user"] }) {
 
 // ─── Account tab ──────────────────────────────────────────────────────────────
 function TabAccount({ user, onReload }: { user: DashboardData["user"]; onReload: () => void }) {
-  // ── Profile section ──
-  const [firstName,   setFirstName]   = useState(user.firstName ?? "");
-  const [lastName,    setLastName]    = useState(user.lastName ?? "");
-  const [avatarUrl,   setAvatarUrl]   = useState(user.avatarUrl ?? "");
-  const [avatarUp,    setAvatarUp]    = useState(false);
-  const [avatarErr,   setAvatarErr]   = useState("");
-  const [profSaving,  setProfSaving]  = useState(false);
-  const [profMsg,     setProfMsg]     = useState("");
-  const [profErr,     setProfErr]     = useState("");
-
-  // ── Password section ──
-  const [currentPw,   setCurrentPw]   = useState("");
-  const [newPw,       setNewPw]       = useState("");
-  const [confirmPw,   setConfirmPw]   = useState("");
-  const [pwSaving,    setPwSaving]    = useState(false);
-  const [pwMsg,       setPwMsg]       = useState("");
-  const [pwErr,       setPwErr]       = useState("");
-
+  const [firstName, setFirstName]   = useState(user.firstName ?? "");
+  const [lastName, setLastName]     = useState(user.lastName ?? "");
+  const [avatarUrl, setAvatarUrl]   = useState(user.avatarUrl ?? "");
+  const [avatarUp, setAvatarUp]     = useState(false);
+  const [avatarErr, setAvatarErr]   = useState("");
+  const [profSaving, setProfSaving] = useState(false);
+  const [profMsg, setProfMsg]       = useState("");
+  const [profErr, setProfErr]       = useState("");
+  const [currentPw, setCurrentPw]   = useState("");
+  const [newPw, setNewPw]           = useState("");
+  const [confirmPw, setConfirmPw]   = useState("");
+  const [pwSaving, setPwSaving]     = useState(false);
+  const [pwMsg, setPwMsg]           = useState("");
+  const [pwErr, setPwErr]           = useState("");
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
-
   const av = initials(user.firstName, user.lastName, user.email);
+  const inputStyle: React.CSSProperties = { width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) { setAvatarErr("Photo must be under 5 MB."); return; }
-    const allowed = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-    if (!allowed.includes(file.type)) { setAvatarErr("Images only (PNG, JPG, GIF, WEBP)."); return; }
-    setAvatarErr("");
-    setAvatarUp(true);
-    try {
-      const url = await uploadToCloudinary(file);
-      setAvatarUrl(url);
-    } catch {
-      setAvatarErr("Upload failed. Please try again.");
-    } finally {
-      setAvatarUp(false);
-    }
+    setAvatarErr(""); setAvatarUp(true);
+    try { const url = await uploadToCloudinary(file); setAvatarUrl(url); }
+    catch { setAvatarErr("Upload failed. Please try again."); }
+    finally { setAvatarUp(false); }
   };
 
   const saveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setProfErr(""); setProfMsg("");
-    setProfSaving(true);
-    try {
-      await apiFetch("/auth/profile", {
-        method: "PUT",
-        body: JSON.stringify({
-          firstName: firstName.trim() || null,
-          lastName:  lastName.trim() || null,
-          avatarUrl: avatarUrl || null,
-        }),
-      });
-      setProfMsg("Profile updated.");
-      onReload();
-    } catch (err) {
-      setProfErr(err instanceof ApiError ? err.message : "Update failed.");
-    } finally {
-      setProfSaving(false);
-    }
+    e.preventDefault(); setProfErr(""); setProfMsg(""); setProfSaving(true);
+    try { await apiFetch("/auth/profile", { method: "PUT", body: JSON.stringify({ firstName: firstName.trim() || null, lastName: lastName.trim() || null, avatarUrl: avatarUrl || null }) }); setProfMsg("Profile updated."); onReload(); }
+    catch (err) { setProfErr(err instanceof ApiError ? err.message : "Update failed."); }
+    finally { setProfSaving(false); }
   };
 
   const changePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPwErr(""); setPwMsg("");
+    e.preventDefault(); setPwErr(""); setPwMsg("");
     if (newPw !== confirmPw) { setPwErr("New passwords do not match."); return; }
     if (newPw.length < 8) { setPwErr("New password must be at least 8 characters."); return; }
     setPwSaving(true);
-    try {
-      await apiFetch("/auth/change-password", {
-        method: "POST",
-        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
-      });
-      setPwMsg("Password changed successfully.");
-      setCurrentPw(""); setNewPw(""); setConfirmPw("");
-    } catch (err) {
-      setPwErr(err instanceof ApiError ? err.message : "Failed to change password.");
-    } finally {
-      setPwSaving(false);
-    }
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%", background: "var(--s3)", border: "1px solid var(--bdr)",
-    borderRadius: 7, padding: "8px 11px", fontSize: 13, color: "var(--tp)",
-    fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box",
+    try { await apiFetch("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }) }); setPwMsg("Password changed successfully."); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }
+    catch (err) { setPwErr(err instanceof ApiError ? err.message : "Failed to change password."); }
+    finally { setPwSaving(false); }
   };
 
   return (
     <>
-      <div className="p-greet">
-        <h2>Account Settings</h2>
-        <p>Update your profile, display name, and password.</p>
-      </div>
-
+      <div className="p-greet"><h2>Account Settings</h2><p>Update your profile, display name, and password.</p></div>
       <div className="p-two-col">
         <div>
-          {/* Profile card */}
           <div className="p-card">
             <div className="p-card-title">Your Profile</div>
-
-            {/* Avatar */}
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt="Profile photo"
-                  style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--bdr)" }}
-                />
-              ) : (
-                <div className="p-av" style={{ width: 60, height: 60, fontSize: 22, flexShrink: 0 }}>{av}</div>
-              )}
-              <div>
-                {cloudName ? (
-                  <>
-                    <label style={{ cursor: "pointer" }}>
-                      <span className="p-btn p-btn-blue" style={{ fontSize: 11, padding: "5px 12px", display: "inline-block", cursor: "pointer" }}>
-                        {avatarUp ? "Uploading…" : avatarUrl ? "Change photo" : "Upload photo"}
-                      </span>
-                      <input type="file" accept="image/*" disabled={avatarUp} onChange={handleAvatarChange} style={{ display: "none" }} />
-                    </label>
-                    {avatarUrl && (
-                      <button type="button" style={{ display: "block", marginTop: 4, fontSize: 11, color: "var(--ts)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }} onClick={() => setAvatarUrl("")}>
-                        Remove photo
-                      </button>
-                    )}
-                    {avatarErr && <div style={{ fontSize: 11, color: "var(--r-t)", marginTop: 4 }}>{avatarErr}</div>}
-                  </>
-                ) : (
-                  <div style={{ fontSize: 11, color: "var(--ts)" }}>Profile photo upload not configured.</div>
-                )}
-              </div>
+              {avatarUrl ? <img src={avatarUrl} alt="Profile photo" style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--bdr)" }} /> : <div className="p-av" style={{ width: 60, height: 60, fontSize: 22, flexShrink: 0 }}>{av}</div>}
+              <div>{cloudName ? (<><label style={{ cursor: "pointer" }}><span className="p-btn p-btn-blue" style={{ fontSize: 11, padding: "5px 12px", display: "inline-block", cursor: "pointer" }}>{avatarUp ? "Uploading…" : avatarUrl ? "Change photo" : "Upload photo"}</span><input type="file" accept="image/*" disabled={avatarUp} onChange={handleAvatarChange} style={{ display: "none" }} /></label>{avatarUrl && <button type="button" style={{ display: "block", marginTop: 4, fontSize: 11, color: "var(--ts)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }} onClick={() => setAvatarUrl("")}>Remove photo</button>}{avatarErr && <div style={{ fontSize: 11, color: "var(--r-t)", marginTop: 4 }}>{avatarErr}</div>}</>) : <div style={{ fontSize: 11, color: "var(--ts)" }}>Profile photo upload not configured.</div>}</div>
             </div>
-
             <form onSubmit={saveProfile}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>First name</label>
-                  <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Last name</label>
-                  <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" style={inputStyle} />
-                </div>
+                <div><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>First name</label><input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" style={inputStyle} /></div>
+                <div><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Last name</label><input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" style={inputStyle} /></div>
               </div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Email address</label>
-                <input type="email" value={user.email} readOnly style={{ ...inputStyle, opacity: 0.6, cursor: "default" }} />
-                <div style={{ fontSize: 11, color: "var(--ts)", marginTop: 4 }}>Email cannot be changed. Contact support if needed.</div>
-              </div>
+              <div style={{ marginBottom: 10 }}><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Email address</label><input type="email" value={user.email} readOnly style={{ ...inputStyle, opacity: 0.6, cursor: "default" }} /><div style={{ fontSize: 11, color: "var(--ts)", marginTop: 4 }}>Email cannot be changed.</div></div>
               {profMsg && <div style={{ fontSize: 12, color: "var(--g-t)", marginBottom: 8 }}>✓ {profMsg}</div>}
-              {profErr && (
-                <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>
-                  {profErr}
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button type="submit" className="p-btn p-btn-blue" disabled={profSaving || avatarUp}>
-                  {profSaving ? "Saving…" : "Save Profile →"}
-                </button>
-              </div>
+              {profErr && <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>{profErr}</div>}
+              <div style={{ display: "flex", justifyContent: "flex-end" }}><button type="submit" className="p-btn p-btn-blue" disabled={profSaving || avatarUp}>{profSaving ? "Saving…" : "Save Profile →"}</button></div>
             </form>
           </div>
         </div>
-
         <div>
-          {/* Change password card */}
           <div className="p-card">
             <div className="p-card-title">Change Password</div>
-            <div style={{ fontSize: 12, color: "var(--ts)", marginBottom: 14 }}>
-              Your password must be at least 8 characters. You will stay logged in after changing it.
-            </div>
             <form onSubmit={changePassword}>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
-                  Current password <span style={{ color: "var(--r-t)" }}>*</span>
-                </label>
-                <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="Enter current password" required style={inputStyle} />
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
-                  New password <span style={{ color: "var(--r-t)" }}>*</span>
-                </label>
-                <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 8 characters" required style={inputStyle} />
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>
-                  Confirm new password <span style={{ color: "var(--r-t)" }}>*</span>
-                </label>
-                <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Repeat new password" required style={inputStyle} />
-              </div>
+              <div style={{ marginBottom: 10 }}><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Current password <span style={{ color: "var(--r-t)" }}>*</span></label><input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="Enter current password" required style={inputStyle} /></div>
+              <div style={{ marginBottom: 10 }}><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>New password <span style={{ color: "var(--r-t)" }}>*</span></label><input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 8 characters" required style={inputStyle} /></div>
+              <div style={{ marginBottom: 10 }}><label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--ts)", marginBottom: 4 }}>Confirm new password <span style={{ color: "var(--r-t)" }}>*</span></label><input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Repeat new password" required style={inputStyle} /></div>
               {pwMsg && <div style={{ fontSize: 12, color: "var(--g-t)", marginBottom: 8 }}>✓ {pwMsg}</div>}
-              {pwErr && (
-                <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>
-                  {pwErr}
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button type="submit" className="p-btn p-btn-blue" disabled={pwSaving}>
-                  {pwSaving ? "Changing…" : "Change Password →"}
-                </button>
-              </div>
+              {pwErr && <div style={{ fontSize: 12, color: "var(--r-t)", background: "var(--r-bg)", border: "1px solid var(--r-b)", borderRadius: 7, padding: "7px 11px", marginBottom: 10 }}>{pwErr}</div>}
+              <div style={{ display: "flex", justifyContent: "flex-end" }}><button type="submit" className="p-btn p-btn-blue" disabled={pwSaving}>{pwSaving ? "Changing…" : "Change Password →"}</button></div>
             </form>
           </div>
-
-          {/* Account info */}
           <div className="p-card">
             <div className="p-card-title">Account Info</div>
-            <div style={{ fontSize: 13, color: "var(--tp)", marginBottom: 6 }}>
-              <span style={{ color: "var(--ts)", fontSize: 11 }}>Plan</span><br />
-              {capitalize(user.planTier)}
-            </div>
-            <div style={{ fontSize: 13, color: "var(--tp)", marginBottom: 6 }}>
-              <span style={{ color: "var(--ts)", fontSize: 11 }}>Vertical</span><br />
-              {capitalize(user.vertical)}
-            </div>
-            <div style={{ fontSize: 13, color: "var(--tp)" }}>
-              <span style={{ color: "var(--ts)", fontSize: 11 }}>Role</span><br />
-              {user.role === "client_admin" ? "Account owner" : user.role === "client_staff" ? "Staff member" : user.role}
-            </div>
+            <div style={{ fontSize: 13, color: "var(--tp)", marginBottom: 6 }}><span style={{ color: "var(--ts)", fontSize: 11 }}>Plan</span><br />{capitalize(user.planTier)}</div>
+            <div style={{ fontSize: 13, color: "var(--tp)", marginBottom: 6 }}><span style={{ color: "var(--ts)", fontSize: 11 }}>Vertical</span><br />{capitalize(user.vertical)}</div>
+            <div style={{ fontSize: 13, color: "var(--tp)" }}><span style={{ color: "var(--ts)", fontSize: 11 }}>Role</span><br />{user.role === "client_admin" ? "Account owner" : user.role === "client_staff" ? "Staff member" : user.role}</div>
           </div>
         </div>
       </div>
@@ -1600,166 +1241,44 @@ function TabAccount({ user, onReload }: { user: DashboardData["user"]; onReload:
 }
 
 // ─── Resources tab ────────────────────────────────────────────────────────────
-interface ResourceItem {
-  id:          string;
-  title:       string;
-  description: string | null;
-  category:    string | null;
-  url:         string | null;
-  icon:        string | null;
-  orderIndex:  number;
-}
-
-interface TutorialItem {
-  id:         string;
-  title:      string;
-  duration:   string | null;
-  videoUrl:   string | null;
-  orderIndex: number;
-}
+interface ResourceItem { id: string; title: string; description: string | null; category: string | null; url: string | null; icon: string | null; orderIndex: number; }
+interface TutorialItem { id: string; title: string; duration: string | null; videoUrl: string | null; orderIndex: number; }
 
 function TabResources({ user, onTabChange }: { user: DashboardData["user"]; onTabChange: (t: Tab) => void }) {
-  const [resources,  setResources]  = useState<ResourceItem[]>([]);
-  const [tutorials,  setTutorials]  = useState<TutorialItem[]>([]);
+  const [resources, setResources]   = useState<ResourceItem[]>([]);
+  const [tutorials, setTutorials]   = useState<TutorialItem[]>([]);
   const [resLoading, setResLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      apiFetch<{ resources: ResourceItem[] }>("/resources"),
-      apiFetch<{ tutorials: TutorialItem[] }>("/resources/tutorials"),
-    ]).then(([r, t]) => {
-      setResources(r.resources);
-      setTutorials(t.tutorials);
-    }).catch(() => {
-      // silently degrade — static fallback still renders if API fails
-    }).finally(() => setResLoading(false));
+    Promise.all([apiFetch<{ resources: ResourceItem[] }>("/resources"), apiFetch<{ tutorials: TutorialItem[] }>("/resources/tutorials")])
+      .then(([r, t]) => { setResources(r.resources); setTutorials(t.tutorials); })
+      .catch(() => {}).finally(() => setResLoading(false));
   }, []);
 
   return (
     <>
-      <div className="p-greet">
-        <h2>Resources</h2>
-        <p>Academy materials, support articles, and sign-off documents — everything in one place.</p>
-      </div>
+      <div className="p-greet"><h2>Resources</h2><p>Academy materials, support articles, and sign-off documents.</p></div>
       <div className="p-two-col">
         <div>
           <div className="p-card">
             <div className="p-card-title">Academy Resources</div>
-            <div style={{ fontSize: 11, color: "var(--ts)", marginBottom: 12 }}>
-              Your programme materials and walkthrough videos.
-            </div>
-            {resLoading ? (
-              <div style={{ fontSize: 12, color: "var(--ts)", padding: "8px 0" }}>Loading…</div>
-            ) : resources.length > 0 ? (
-              resources.map((r) => (
-                r.url ? (
-                  <a
-                    key={r.id}
-                    href={r.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ textDecoration: "none" }}
-                  >
-                    <div className="p-ci">
-                      <div className={`p-ci-icon ${r.category === "video" ? "ic-loom" : "ic-res"}`}>
-                        {r.icon || (r.category === "video" ? "▶" : "R")}
-                      </div>
-                      <div className="p-ci-info">
-                        <div className="p-ci-name">{r.title}</div>
-                        {r.description && <div className="p-ci-meta">{r.description}</div>}
-                      </div>
-                      <span className="p-badge b-prog">{r.category === "video" ? "Watch" : "Open"}</span>
-                    </div>
-                  </a>
-                ) : (
-                  <div key={r.id} className="p-ci">
-                    <div className={`p-ci-icon ${r.category === "video" ? "ic-loom" : "ic-res"}`}>
-                      {r.icon || (r.category === "video" ? "▶" : "R")}
-                    </div>
-                    <div className="p-ci-info">
-                      <div className="p-ci-name">{r.title}</div>
-                      {r.description && <div className="p-ci-meta">{r.description}</div>}
-                    </div>
-                    <span className="p-badge b-prog">{r.category === "video" ? "Watch" : "Open"}</span>
-                  </div>
-                )
-              ))
-            ) : (
-              <>
-                <div className="p-ci">
-                  <div className="p-ci-icon ic-loom">▶</div>
-                  <div className="p-ci-info">
-                    <div className="p-ci-name">Signal Launch — {capitalize(user.planTier)} Plan Walkthrough</div>
-                    <div className="p-ci-meta">Your plan · Personalised setup walkthrough</div>
-                  </div>
-                  <span className="p-badge b-prog">Watch</span>
-                </div>
-                <div className="p-ci">
-                  <div className="p-ci-icon ic-res">S</div>
-                  <div className="p-ci-info">
-                    <div className="p-ci-name">Client Success Manual — {capitalize(user.planTier)}</div>
-                    <div className="p-ci-meta">Your complete operating guide</div>
-                  </div>
-                  <span className="p-badge b-lock">Pending sign</span>
-                </div>
-                <div className="p-ci">
-                  <div className="p-ci-icon ic-res">T</div>
-                  <div className="p-ci-info">
-                    <div className="p-ci-name">Troubleshooting Guide</div>
-                    <div className="p-ci-meta">Common issues and how to fix them</div>
-                  </div>
-                  <span className="p-badge b-prog">Open</span>
-                </div>
-                <div className="p-ci">
-                  <div className="p-ci-icon ic-res">W</div>
-                  <div className="p-ci-info">
-                    <div className="p-ci-name">WhatsApp Setup Guide</div>
-                    <div className="p-ci-meta">WABA connection, templates, message limits</div>
-                  </div>
-                  <span className="p-badge b-prog">Open</span>
-                </div>
-                <div className="p-ci">
-                  <div className="p-ci-icon ic-res">B</div>
-                  <div className="p-ci-info">
-                    <div className="p-ci-name">Booking Automation Tutorial</div>
-                    <div className="p-ci-meta">Calendar, reminder sequences, no-show handling</div>
-                  </div>
-                  <span className="p-badge b-prog">Open</span>
-                </div>
-              </>
-            )}
+            {resLoading ? <div style={{ fontSize: 12, color: "var(--ts)", padding: "8px 0" }}>Loading…</div> : resources.length > 0 ? resources.map((r) => (
+              r.url ? <a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}><div className="p-ci"><div className={`p-ci-icon ${r.category === "video" ? "ic-loom" : "ic-res"}`}>{r.icon || (r.category === "video" ? "▶" : "R")}</div><div className="p-ci-info"><div className="p-ci-name">{r.title}</div>{r.description && <div className="p-ci-meta">{r.description}</div>}</div><span className="p-badge b-prog">{r.category === "video" ? "Watch" : "Open"}</span></div></a>
+              : <div key={r.id} className="p-ci"><div className={`p-ci-icon ${r.category === "video" ? "ic-loom" : "ic-res"}`}>{r.icon || (r.category === "video" ? "▶" : "R")}</div><div className="p-ci-info"><div className="p-ci-name">{r.title}</div>{r.description && <div className="p-ci-meta">{r.description}</div>}</div><span className="p-badge b-prog">{r.category === "video" ? "Watch" : "Open"}</span></div>
+            )) : <div style={{ fontSize: 12, color: "var(--ts)" }}>No resources yet.</div>}
           </div>
-
-          {/* Support Articles — clearly distinct from Academy resources */}
-          <div className="p-card" style={{ border: "1px solid var(--bdr)" }}>
+          <div className="p-card">
             <div className="p-card-title">Support Articles</div>
-            <div style={{ fontSize: 11, color: "var(--ts)", marginBottom: 14 }}>
-              Step-by-step guides and answers to common questions — separate from your Academy programme.
-            </div>
-            <a
-              href="https://start.wibiz.ai/support/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "block", textDecoration: "none", marginBottom: 12 }}
-            >
+            <a href="https://start.wibiz.ai/support/" target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "12px 14px", cursor: "pointer" }}>
                 <div style={{ width: 34, height: 34, borderRadius: 8, background: "var(--b200)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#fff", flexShrink: 0 }}>?</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--b400)", marginBottom: 2 }}>Browse WiBiz Support Articles</div>
-                  <div style={{ fontSize: 11, color: "var(--ts)" }}>Knowledge base · Platform guides · FAQs</div>
-                </div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: "var(--b400)", marginBottom: 2 }}>Browse WiBiz Support Articles</div><div style={{ fontSize: 11, color: "var(--ts)" }}>Knowledge base · Platform guides · FAQs</div></div>
                 <span style={{ fontSize: 14, color: "var(--ts)" }}>↗</span>
               </div>
             </a>
-            <div
-              onClick={() => onTabChange("support")}
-              style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "12px 14px", cursor: "pointer" }}
-            >
+            <div onClick={() => onTabChange("support")} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--s3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "12px 14px", cursor: "pointer" }}>
               <div style={{ width: 34, height: 34, borderRadius: 8, background: "var(--b400)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#fff", flexShrink: 0 }}>✉</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--tp)", marginBottom: 2 }}>Submit a Support Ticket</div>
-                <div style={{ fontSize: 11, color: "var(--ts)" }}>Can't find the answer? Our team will help.</div>
-              </div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: "var(--tp)", marginBottom: 2 }}>Submit a Support Ticket</div><div style={{ fontSize: 11, color: "var(--ts)" }}>Can't find the answer? Our team will help.</div></div>
               <span style={{ fontSize: 14, color: "var(--ts)" }}>→</span>
             </div>
           </div>
@@ -1767,79 +1286,38 @@ function TabResources({ user, onTabChange }: { user: DashboardData["user"]; onTa
         <div>
           <div className="p-card">
             <div className="p-card-title">Platform Tutorial Videos</div>
-            {resLoading ? (
-              <div style={{ fontSize: 12, color: "var(--ts)", padding: "8px 0" }}>Loading…</div>
-            ) : tutorials.length > 0 ? (
-              tutorials.map((t) =>
-                t.videoUrl ? (
-                  <a
-                    key={t.id}
-                    href={t.videoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ textDecoration: "none" }}
-                  >
-                    <div className="p-ql" style={{ cursor: "pointer" }}>
-                      <div className="p-ql-dot" />
-                      {t.title}{t.duration ? ` (${t.duration})` : ""}
-                    </div>
-                  </a>
-                ) : (
-                  <div key={t.id} className="p-ql">
-                    <div className="p-ql-dot" />
-                    {t.title}{t.duration ? ` (${t.duration})` : ""}
-                  </div>
-                )
-              )
-            ) : (
-              <>
-                <div className="p-ql"><div className="p-ql-dot" />Dashboard orientation (5 min)</div>
-                <div className="p-ql"><div className="p-ql-dot" />WhatsApp channel setup (8 min)</div>
-                <div className="p-ql"><div className="p-ql-dot" />CRM and contact tagging (6 min)</div>
-                <div className="p-ql"><div className="p-ql-dot" />Booking automation walkthrough (10 min)</div>
-                <div className="p-ql"><div className="p-ql-dot" />Payment link activation (4 min)</div>
-                <div className="p-ql"><div className="p-ql-dot" />Reporting dashboard (7 min)</div>
-              </>
-            )}
+            {resLoading ? <div style={{ fontSize: 12, color: "var(--ts)", padding: "8px 0" }}>Loading…</div> : tutorials.length > 0 ? tutorials.map((t) => t.videoUrl ? <a key={t.id} href={t.videoUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}><div className="p-ql" style={{ cursor: "pointer" }}><div className="p-ql-dot" />{t.title}{t.duration ? ` (${t.duration})` : ""}</div></a> : <div key={t.id} className="p-ql"><div className="p-ql-dot" />{t.title}{t.duration ? ` (${t.duration})` : ""}</div>) : <div style={{ fontSize: 12, color: "var(--ts)" }}>No tutorials yet.</div>}
           </div>
           <div className="p-card">
             <div className="p-card-title">Your Sign-Off Documents</div>
-            <div className="p-cert-item">
-              <div className="p-cert-icon cl">M</div>
-              <div className="p-cert-info">
-                <div className="p-cert-name">Client Success Manual</div>
-                <div className="p-cert-sub">DocuSeal signature pending</div>
-              </div>
-              <span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span>
-            </div>
-            <div className="p-cert-item">
-              <div className="p-cert-icon cl">S</div>
-              <div className="p-cert-info">
-                <div className="p-cert-name">System Test Certificate</div>
-                <div className="p-cert-sub">Pass the System Test to receive</div>
-              </div>
-              <span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span>
-            </div>
-            {user.hskdRequired && (
-              <div className="p-cert-item">
-                <div className="p-cert-icon cl">H</div>
-                <div className="p-cert-info">
-                  <div className="p-cert-name">HSKD Liability Sign-Off</div>
-                  <div className="p-cert-sub">5 scenarios · DocuSeal required</div>
-                </div>
-                <span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span>
-              </div>
-            )}
-            <div className="p-cert-item">
-              <div className="p-cert-icon cl">C</div>
-              <div className="p-cert-info">
-                <div className="p-cert-name">ClearPath Certificate</div>
-                <div className="p-cert-sub">Pending all gate completions</div>
-              </div>
-              <span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span>
-            </div>
+            <div className="p-cert-item"><div className="p-cert-icon cl">M</div><div className="p-cert-info"><div className="p-cert-name">Client Success Manual</div><div className="p-cert-sub">DocuSeal signature pending</div></div><span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span></div>
+            <div className="p-cert-item"><div className="p-cert-icon cl">S</div><div className="p-cert-info"><div className="p-cert-name">System Test Certificate</div><div className="p-cert-sub">Pass the System Test to receive</div></div><span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span></div>
+            <div className="p-cert-item" onClick={() => onTabChange("hskd")} style={{ cursor: "pointer" }}><div className="p-cert-icon cl">C</div><div className="p-cert-info"><div className="p-cert-name">ClearPath Certificate</div><div className="p-cert-sub">HSKD certification required</div></div><span style={{ fontSize: 11, color: "var(--tm)" }}>Pending</span></div>
           </div>
         </div>
+      </div>
+    </>
+  );
+}
+
+// ─── HSKD tab ─────────────────────────────────────────────────────────────────
+function TabHskd({ user }: { user: DashboardData["user"] }) {
+  const navigate = useNavigate();
+  return (
+    <>
+      <div className="p-greet">
+        <h2>ClearPath Certification</h2>
+        <p>Complete your industry certification to unlock Specialist Mode on your AI system.</p>
+      </div>
+      <div className="p-card" style={{ maxWidth: 480 }}>
+        <div className="p-card-title">HSKD ClearPath Certification</div>
+        <div style={{ fontSize: 13, color: "var(--ts)", marginBottom: 16 }}>
+          Select your industry and complete training, scenario certification,
+          prohibited content declaration, and ClearPath Affirmation to receive your certificate.
+        </div>
+        <button className="p-btn p-btn-blue" onClick={() => navigate("/hskd")}>
+          Go to Certification →
+        </button>
       </div>
     </>
   );
@@ -1859,11 +1337,8 @@ export default function ClientPortal() {
       const d = await apiFetch<DashboardData>("/dashboard");
       setData(d);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        navigate("/login", { replace: true });
-      } else {
-        setError("Failed to load. Please refresh.");
-      }
+      if (err instanceof ApiError && err.status === 401) navigate("/login", { replace: true });
+      else setError("Failed to load. Please refresh.");
     }
   }, [navigate]);
 
@@ -1876,53 +1351,31 @@ export default function ClientPortal() {
 
   const submitExerciseProof = async (exerciseId: string, proofText: string, proofImageUrl: string | null) => {
     setSubmitting(exerciseId);
-    try {
-      await apiFetch(`/progress/exercise/${exerciseId}`, {
-        method: "POST",
-        body:   JSON.stringify({ proofText, proofImageUrl }),
-      });
-      await load();
-    } finally {
-      setSubmitting(null);
-    }
+    try { await apiFetch(`/progress/exercise/${exerciseId}`, { method: "POST", body: JSON.stringify({ proofText, proofImageUrl }) }); await load(); }
+    finally { setSubmitting(null); }
   };
 
   const submitModuleGate = async (moduleId: string) => {
     setSubmitting(moduleId);
-    try {
-      await apiFetch(`/progress/module/${moduleId}`, { method: "POST" });
-      await load();
-    } finally {
-      setSubmitting(null);
-    }
+    try { await apiFetch(`/progress/module/${moduleId}`, { method: "POST" }); await load(); }
+    finally { setSubmitting(null); }
   };
 
-  if (error) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--r-t)" }}>
-        {error}
-      </div>
-    );
-  }
-  if (!data) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--ts)", fontSize: 13 }}>
-        Loading…
-      </div>
-    );
-  }
+  if (error) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--r-t)" }}>{error}</div>;
+  if (!data) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--ts)", fontSize: 13 }}>Loading…</div>;
 
   const { user } = data;
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
   const av = initials(user.firstName, user.lastName, user.email);
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "dashboard",  label: "Dashboard"    },
-    { id: "programme",  label: "My Programme" },
-    { id: "team",       label: "My Team"      },
-    { id: "resources",  label: "Resources"    },
-    { id: "support",    label: "Get Support"  },
-    { id: "account",    label: "My Account"   },
+    { id: "dashboard",  label: "Dashboard"              },
+    { id: "programme",  label: "My Programme"           },
+    { id: "team",       label: "My Team"                },
+    { id: "resources",  label: "Resources"              },
+    { id: "hskd",       label: "ClearPath Certification"},
+    { id: "support",    label: "Get Support"            },
+    { id: "account",    label: "My Account"             },
   ];
 
   const planLabel = user.planTier ? `${capitalize(user.planTier)} plan` : "";
@@ -1931,23 +1384,15 @@ export default function ClientPortal() {
   return (
     <div>
       <nav className="p-nav">
-        <span className="p-logo">
-          WiBiz <span>Academy</span>
-        </span>
+        <span className="p-logo">WiBiz <span>Universe</span></span>
         <div className="p-nav-tabs">
           {tabs.map((t) => (
-            <button
-              key={t.id}
-              className={`p-tab ${tab === t.id ? "active" : ""}`}
-              onClick={() => setTab(t.id)}
-            >
+            <button key={t.id} className={`p-tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
               {t.label}
             </button>
           ))}
           {user.role === "wibiz_admin" && (
-            <button className="p-tab" onClick={() => navigate("/admin")}>
-              WiBiz Admin
-            </button>
+            <button className="p-tab" onClick={() => navigate("/admin")}>WiBiz Admin</button>
           )}
         </div>
         <div className="p-nav-user">
@@ -1957,9 +1402,7 @@ export default function ClientPortal() {
           <div className="p-av">{av}</div>
           <span>{displayName}</span>
           <span style={{ color: "var(--bdr)", margin: "0 2px" }}>·</span>
-          <span style={{ cursor: "pointer", color: "var(--tm)" }} onClick={logout}>
-            Sign out
-          </span>
+          <span style={{ cursor: "pointer", color: "var(--tm)" }} onClick={logout}>Sign out</span>
         </div>
       </nav>
 
@@ -1971,23 +1414,13 @@ export default function ClientPortal() {
       </div>
 
       <div className="p-view">
-        {tab === "dashboard" && (
-          <TabDashboard data={data} onTabChange={setTab} />
-        )}
-        {tab === "programme" && (
-          <TabProgramme
-            modules={data.modules}
-            stats={data.stats}
-            onExerciseSubmit={submitExerciseProof}
-            onModuleGate={submitModuleGate}
-            onReload={load}
-            submitting={submitting}
-          />
-        )}
-        {tab === "team"      && <TabTeam      user={user} />}
-        {tab === "resources" && <TabResources user={user} onTabChange={setTab} />}
-        {tab === "support"   && <TabSupport   user={user} />}
-        {tab === "account"   && <TabAccount   user={user} onReload={load} />}
+        {tab === "dashboard"  && <TabDashboard data={data} onTabChange={setTab} />}
+        {tab === "programme"  && <TabProgramme modules={data.modules} stats={data.stats} onExerciseSubmit={submitExerciseProof} onModuleGate={submitModuleGate} onReload={load} submitting={submitting} />}
+        {tab === "team"       && <TabTeam      user={user} />}
+        {tab === "resources"  && <TabResources user={user} onTabChange={setTab} />}
+        {tab === "hskd"       && <TabHskd      user={user} />}
+        {tab === "support"    && <TabSupport   user={user} />}
+        {tab === "account"    && <TabAccount   user={user} onReload={load} />}
       </div>
     </div>
   );
