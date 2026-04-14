@@ -20,13 +20,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DB_URL = process.env.DATABASE_URL;
 if (!DB_URL) {
-  console.warn("[migrate] DATABASE_URL not set  skipping migrations - migrate.ts:23");
+  console.warn("[migrate] DATABASE_URL not set — skipping migrations");
   process.exit(0);
 }
 
-// ─── Add custom ALTER TABLE migrations here for post-release schema changes ───
-// Format: { name: "unique-name", sql: "ALTER TABLE ..." }
-// Each migration runs once and is tracked in _custom_migrations table.
 const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
   {
     name: "0001_exercises_proof_prompt",
@@ -63,7 +60,6 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
       created_at TIMESTAMP DEFAULT NOW()
     )`,
   },
-  // ── Submission review workflow (2026-04) ──────────────────────────────────
   {
     name: "0005_submission_status_enum",
     sql: `DO $$ BEGIN
@@ -98,7 +94,6 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
     name: "0009_backfill_submission_status_approved",
     sql: `UPDATE user_progress SET submission_status = 'approved' WHERE submission_status = 'pending_review'`,
   },
-  // ── My Team + DocuSeal (2026-04) ──────────────────────────────────────────
   {
     name: "0010_users_team_fields",
     sql: `ALTER TABLE users
@@ -121,7 +116,6 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
       created_at     TIMESTAMP    DEFAULT NOW()
     )`,
   },
-  // ── User avatar + Support Tickets (2026-04) ───────────────────────────────
   {
     name: "0012_users_avatar_url",
     sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`,
@@ -142,7 +136,6 @@ const CUSTOM_MIGRATIONS: { name: string; sql: string }[] = [
       updated_at     TIMESTAMP    DEFAULT NOW()
     )`,
   },
-  // ── Resources + Tutorial Videos (2026-04) ────────────────────────────────
   {
     name: "0014_resources",
     sql: `CREATE TABLE IF NOT EXISTS resources (
@@ -312,15 +305,13 @@ async function run(): Promise<void> {
       : undefined,
   });
 
-  // 1. Run drizzle-kit generated migrations
   const db = drizzle(pool);
   const migrationsFolder = path.resolve(__dirname, "..", "drizzle", "migrations");
 
-  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:319");
+  console.log("[migrate] Running drizzle-kit migrations…");
   await migrate(db, { migrationsFolder });
-  console.log("[migrate] Drizzle migrations complete - migrate.ts:321");
+  console.log("[migrate] Drizzle migrations complete");
 
-  // 2. Run custom migrations
   if (CUSTOM_MIGRATIONS.length > 0) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS _custom_migrations (
@@ -335,7 +326,7 @@ async function run(): Promise<void> {
         [m.name]
       );
       if (rows.length > 0) {
-        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:338`);
+        console.log(`[migrate] ✓ Already applied: ${m.name}`);
         continue;
       }
       try {
@@ -344,20 +335,21 @@ async function run(): Promise<void> {
           "INSERT INTO _custom_migrations (name) VALUES ($1)",
           [m.name]
         );
-        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:347`);
+        console.log(`[migrate] ✓ Applied: ${m.name}`);
       } catch (err: any) {
-        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:349`, err.message);
+        console.error(`[migrate] ✗ Failed: ${m.name}`, err.message);
         await pool.end();
         process.exit(1);
       }
     }
   }
 
+  console.log("[migrate] Custom migrations count:", CUSTOM_MIGRATIONS.length);
   await pool.end();
-  console.log("[migrate] All migrations complete - migrate.ts:357");
+  console.log("[migrate] All migrations complete");
 }
 
 run().catch((err) => {
-  console.error("[migrate] Fatal error: - migrate.ts:361", err);
+  console.error("[migrate] Fatal error:", err);
   process.exit(1);
-});// cache-bust 
+});
