@@ -22,11 +22,12 @@ export default function HskdProhibitedPage() {
   const { industrySlug } = useParams<{ industrySlug: string }>();
   const navigate = useNavigate();
 
-  const [certId, setCertId]     = useState<string | null>(null);
-  const [items, setItems]       = useState<ProhibitedItem[]>([]);
-  const [confirming, setConf]   = useState<string | null>(null);
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(true);
+  const [certId, setCertId]   = useState<string | null>(null);
+  const [items, setItems]     = useState<ProhibitedItem[]>([]);
+  const [confirming, setConf] = useState<string | null>(null);
+  const [error, setError]     = useState("");
+  const [loading, setLoading] = useState(true);
+  const [navigating, setNavigating] = useState(false);
 
   // Step 1 — get certificationId from my-certification
   useEffect(() => {
@@ -48,10 +49,12 @@ export default function HskdProhibitedPage() {
           navigate(`/hskd/certify/${industrySlug}/scenarios`, { replace: true });
           return;
         }
-        if (cert.status === "AFFIRMATION") {
-          navigate(`/hskd/certify/${industrySlug}/affirmation`, { replace: true });
-          return;
-        }
+
+        // FIX: AFFIRMATION status no longer auto-redirects away.
+        // User may land here with AFFIRMATION status if they previously
+        // confirmed all items but navigation failed. The Next button
+        // will be enabled and they can proceed manually.
+
         if (cert.status === "OPS_REVIEW" || cert.status === "CERTIFIED") {
           navigate(`/hskd/certify/${industrySlug}/status`, { replace: true });
           return;
@@ -112,20 +115,27 @@ export default function HskdProhibitedPage() {
         }
       );
 
-      // Mark item as confirmed in local state
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === itemId
-            ? { ...i, confirmed: true, confirmed_at: new Date().toISOString() }
-            : i
-        )
+      // FIX: Compute updated items synchronously BEFORE setState
+      // so we can accurately check allConfirmedAfterThis without
+      // relying on stale state inside the closure.
+      const updatedItems = items.map((i) =>
+        i.id === itemId
+          ? { ...i, confirmed: true, confirmed_at: new Date().toISOString() }
+          : i
       );
+      const allConfirmedAfterThis = updatedItems.length > 0 && updatedItems.every((i) => i.confirmed);
 
-      // If all confirmed, backend returns status = AFFIRMATION — navigate
-      if (result.status === "AFFIRMATION") {
+      setItems(updatedItems);
+
+      // FIX: Navigate if backend confirms AFFIRMATION status OR if
+      // local state shows all items confirmed — whichever fires first.
+      // This prevents the case where result.status is missing/unexpected
+      // but all items are in fact confirmed.
+      if (result.status === "AFFIRMATION" || allConfirmedAfterThis) {
+        setNavigating(true);
         setTimeout(() => {
           navigate(`/hskd/certify/${industrySlug}/affirmation`);
-        }, 600);
+        }, 800);
       }
     } catch {
       setError("Failed to confirm item. Please try again.");
@@ -164,6 +174,17 @@ export default function HskdProhibitedPage() {
     );
   }
 
+  // ── Navigating overlay ─────────────────────────────────────────────────────
+  if (navigating) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-muted-foreground text-sm">
+        <div className="text-green-600 text-4xl">✓</div>
+        <p className="font-medium text-foreground">All items confirmed.</p>
+        <p>Proceeding to ClearPath Affirmation…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -191,6 +212,13 @@ export default function HskdProhibitedPage() {
         {error && (
           <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-sm text-destructive">
             {error}
+          </div>
+        )}
+
+        {/* All confirmed banner */}
+        {allConfirmed && (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-sm text-green-700 font-medium">
+            ✓ All {items.length} items confirmed. Click <strong>Next</strong> to proceed.
           </div>
         )}
 
@@ -235,7 +263,7 @@ export default function HskdProhibitedPage() {
           ))}
         </div>
 
-        {/* Next button */}
+        {/* Next button — always visible, enabled only when all confirmed */}
         <div className="flex justify-end">
           <button
             disabled={!allConfirmed}
