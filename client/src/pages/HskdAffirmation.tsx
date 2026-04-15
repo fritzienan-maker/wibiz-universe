@@ -53,10 +53,9 @@ export default function HskdAffirmationPage() {
           navigate(`/hskd/certify/${industrySlug}/scenarios`, { replace: true });
           return;
         }
-        if (cert.status === "PROHIBITED") {
-          navigate(`/hskd/certify/${industrySlug}/prohibited`, { replace: true });
-          return;
-        }
+        // NOTE: PROHIBITED is allowed here — user may arrive from the prohibited
+        // page via the Next button before the DB status update propagates.
+        // AFFIRMATION and PROHIBITED both show the affirmation form.
         if (cert.status === "OPS_REVIEW" || cert.status === "CERTIFIED") {
           navigate(`/hskd/certify/${industrySlug}/status`, { replace: true });
           return;
