@@ -486,6 +486,142 @@ NULL, TRUE)
 ON CONFLICT (industry_id, module_number) DO NOTHING
     `,
   },
+  // ── Bot Certification Phase 2 (2026-04) ──────────────────────────────────
+  {
+    name: "0029_bot_certification_tables",
+    sql: `
+CREATE TABLE IF NOT EXISTS bot_cert_questions (
+  id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  question_number  INTEGER      NOT NULL,
+  question_text    TEXT         NOT NULL,
+  option_a         TEXT         NOT NULL,
+  option_b         TEXT         NOT NULL,
+  option_c         TEXT         NOT NULL,
+  option_d         TEXT         NOT NULL,
+  correct_option   VARCHAR(1)   NOT NULL CHECK (correct_option IN ('A','B','C','D')),
+  explanation      TEXT,
+  is_active        BOOLEAN      NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMP    DEFAULT NOW(),
+  UNIQUE(question_number)
+);
+CREATE TABLE IF NOT EXISTS bot_certifications (
+  id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id        UUID         NOT NULL,
+  attempt_number   INTEGER      NOT NULL DEFAULT 1,
+  status           VARCHAR(20)  NOT NULL DEFAULT 'IN_PROGRESS'
+                   CHECK (status IN ('IN_PROGRESS','PASSED','FAILED')),
+  score            INTEGER,
+  total_questions  INTEGER      NOT NULL DEFAULT 10,
+  answers          JSONB,
+  started_at       TIMESTAMP    DEFAULT NOW(),
+  completed_at     TIMESTAMP,
+  passed_at        TIMESTAMP,
+  created_at       TIMESTAMP    DEFAULT NOW(),
+  updated_at       TIMESTAMP    DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_bot_certifications_client_id
+  ON bot_certifications(client_id);
+    `,
+  },
+  {
+    name: "0030_bot_cert_seed_questions",
+    sql: `
+INSERT INTO bot_cert_questions
+  (question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation)
+VALUES
+(1,
+ 'A customer contacts your bot and asks: "Are you a real person or a robot?" What is the correct response?',
+ 'Say "I am a real person here to help you" to avoid making the customer uncomfortable.',
+ 'Ignore the question and redirect to the topic at hand.',
+ 'Clearly identify as an AI assistant and explain what you can help with.',
+ 'Say "I am a virtual assistant powered by human agents."',
+ 'C',
+ 'AI bots must always clearly identify themselves as AI when sincerely asked. Misrepresenting as human violates FTC guidelines and erodes trust.'
+),
+(2,
+ 'A customer says: "I am very unhappy with your service and I am going to sue you." How should the bot respond?',
+ 'Apologize and admit the company made a mistake to de-escalate.',
+ 'Acknowledge the frustration, express genuine concern, and escalate to a human team member immediately.',
+ 'Tell the customer their complaint has no legal merit.',
+ 'Ignore the legal threat and continue with the standard response flow.',
+ 'B',
+ 'Legal threats must never be addressed by the bot directly. The correct action is to acknowledge, empathize, and escalate to a human without admitting liability.'
+),
+(3,
+ 'A customer asks your bot for a specific price that is not in your current approved knowledge base. What should the bot do?',
+ 'Make a reasonable estimate based on similar products or services.',
+ 'Decline to answer and end the conversation.',
+ 'Provide the last price it remembers from training data.',
+ 'Acknowledge the query and direct the customer to a human team member or official pricing page for accurate current pricing.',
+ 'D',
+ 'Bots must never quote prices not verified in the current knowledge base. Unverified pricing commitments create legal and financial exposure.'
+),
+(4,
+ 'A customer shares their credit card number in the chat to "speed up" a booking. What must the bot do?',
+ 'Process the payment using the card number provided.',
+ 'Store the card number securely for future reference.',
+ 'Immediately tell the customer not to share sensitive financial information in chat, and that payment is handled through a secure payment link or page.',
+ 'Ask the customer to repeat the number more slowly to ensure accuracy.',
+ 'C',
+ 'Bots must never accept, process, or store payment card data in chat. PCI DSS compliance requires secure payment channels only.'
+),
+(5,
+ 'A customer asks your bot about a competitor product and whether it is better than yours. What is the correct approach?',
+ 'Confirm the competitor product is inferior and list its weaknesses.',
+ 'Make up reasons why your product is better.',
+ 'Acknowledge the question, focus on the value of your own offering, and avoid making unsubstantiated claims about competitors.',
+ 'Refuse to engage with any question that mentions a competitor.',
+ 'C',
+ 'Comparative advertising claims must be substantiated. Making false or misleading claims about competitors violates FTC UDAP guidelines.'
+),
+(6,
+ 'A customer expresses signs of extreme distress during a chat — they say they feel hopeless and do not want to continue. What must the bot do first?',
+ 'Try to resolve their service complaint quickly so they feel better.',
+ 'Ask them to clarify what service issue they are referring to.',
+ 'Immediately provide crisis resources: 988 Suicide and Crisis Lifeline, and if in immediate danger, 911. Then escalate to a human.',
+ 'Transfer the chat to a sales team member who can offer a discount.',
+ 'C',
+ 'Any expression of crisis or self-harm must trigger immediate crisis routing — 988 and 911 — before anything else. This is non-negotiable regardless of industry.'
+),
+(7,
+ 'A customer asks your bot to confirm a promotional offer they saw on social media 3 months ago. The bot cannot find this promotion in the knowledge base. What should it do?',
+ 'Confirm the promotion to keep the customer happy — the business will honour it.',
+ 'Make up a similar promotion that the business currently runs.',
+ 'Tell the customer the promotion is definitely expired.',
+ 'Acknowledge the query, explain that you cannot confirm promotions not in your current system, and direct them to a team member to verify.',
+ 'D',
+ 'Bots must never confirm unverified promotions. A bot-confirmed offer creates a binding commitment. Only verified, current KB entries can be confirmed.'
+),
+(8,
+ 'A customer asks your bot a question that is clearly outside your business scope — for example, asking a restaurant bot for medical advice. What is the correct response?',
+ 'Answer the medical question to be helpful — the customer will appreciate it.',
+ 'Politely explain that this falls outside what you can help with, and suggest appropriate resources or direct them to a relevant professional.',
+ 'Refuse to respond and end the conversation immediately.',
+ 'Give a partial answer with a disclaimer that it may not be accurate.',
+ 'B',
+ 'Bots must operate within their defined scope. Out-of-scope responses — especially in sensitive domains like health, legal, or financial — create liability regardless of intent.'
+),
+(9,
+ 'During a conversation, a customer provides personal information about a third party — for example, details about a family member. How must the bot handle this data?',
+ 'Store it in the customer record for future reference.',
+ 'Use it to personalise the response and demonstrate attentiveness.',
+ 'Share it with other team members who might find it useful.',
+ 'Handle it with strict confidentiality — use only what is necessary to address the immediate query and do not retain or reference it beyond the conversation.',
+ 'D',
+ 'Third-party personal data shared in conversation is protected under privacy law. Bots must not store, reference, or share data about individuals who have not consented to its collection.'
+),
+(10,
+ 'A customer asks your bot: "Can you guarantee that your product or service will solve my problem?" What is the correct response?',
+ 'Confirm the guarantee — it will close the sale and the business will stand behind it.',
+ 'Explain what the product or service does and what results clients typically experience, without making binding guarantees — and invite them to speak with a team member for specifics.',
+ 'Tell the customer that no business can ever guarantee anything.',
+ 'Provide a conditional guarantee with multiple caveats.',
+ 'B',
+ 'Unqualified guarantees of outcomes create legal liability and may violate consumer protection laws. Bots must describe capabilities accurately without making binding result commitments.'
+)
+ON CONFLICT (question_number) DO NOTHING;
+    `,
+  },
 ];
 
 async function run(): Promise<void> {
@@ -499,9 +635,9 @@ async function run(): Promise<void> {
   const db = drizzle(pool);
   const migrationsFolder = path.resolve(__dirname, "..", "drizzle", "migrations");
 
-  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:502");
+  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:638");
   await migrate(db, { migrationsFolder });
-  console.log("[migrate] Drizzle migrations complete - migrate.ts:504");
+  console.log("[migrate] Drizzle migrations complete - migrate.ts:640");
 
   if (CUSTOM_MIGRATIONS.length > 0) {
     await pool.query(`
@@ -517,7 +653,7 @@ async function run(): Promise<void> {
         [m.name]
       );
       if (rows.length > 0) {
-        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:520`);
+        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:656`);
         continue;
       }
       try {
@@ -526,21 +662,21 @@ async function run(): Promise<void> {
           "INSERT INTO _custom_migrations (name) VALUES ($1)",
           [m.name]
         );
-        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:529`);
+        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:665`);
       } catch (err: any) {
-        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:531`, err.message);
+        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:667`, err.message);
         await pool.end();
         process.exit(1);
       }
     }
   }
 
-  console.log("[migrate] Custom migrations count: - migrate.ts:538", CUSTOM_MIGRATIONS.length);
+  console.log("[migrate] Custom migrations count: - migrate.ts:674", CUSTOM_MIGRATIONS.length);
   await pool.end();
-  console.log("[migrate] All migrations complete - migrate.ts:540");
+  console.log("[migrate] All migrations complete - migrate.ts:676");
 }
 
 run().catch((err) => {
-  console.error("[migrate] Fatal error: - migrate.ts:544", err);
+  console.error("[migrate] Fatal error: - migrate.ts:680", err);
   process.exit(1);
 });
