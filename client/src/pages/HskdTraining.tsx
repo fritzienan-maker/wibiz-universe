@@ -18,13 +18,13 @@ interface Certification {
 
 export default function HskdTrainingPage() {
   const { industrySlug } = useParams<{ industrySlug: string }>();
-  const [modules, setModules]           = useState<TrainingModule[]>([]);
+  const [modules, setModules]             = useState<TrainingModule[]>([]);
   const [certification, setCertification] = useState<Certification | null>(null);
-  const [activeModule, setActive]       = useState<TrainingModule | null>(null);
-  const [completing, setCompleting]     = useState(false);
-  const [allComplete, setAllComplete]   = useState(false);
-  const [error, setError]               = useState("");
-  const [loading, setLoading]           = useState(true);
+  const [activeModule, setActive]         = useState<TrainingModule | null>(null);
+  const [completing, setCompleting]       = useState(false);
+  const [allComplete, setAllComplete]     = useState(false);
+  const [error, setError]                 = useState("");
+  const [loading, setLoading]             = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,7 +36,6 @@ export default function HskdTrainingPage() {
         }
         setCertification(d.certification);
         if (d.certification.status !== "TRAINING") {
-          // Already past training — go to next step
           navigate(`/hskd/certify/${industrySlug}/scenarios`, { replace: true });
           return;
         }
@@ -63,8 +62,16 @@ export default function HskdTrainingPage() {
     try {
       await apiFetch(`/client/hskd/training/${certification.id}/complete`, { method: "POST" });
       setAllComplete(true);
-    } catch {
-      setError("Failed to complete training. Please try again.");
+      setTimeout(() => {
+        navigate(`/hskd/certify/${industrySlug}/scenarios`);
+      }, 500);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 400) {
+        // Already completed — just navigate
+        navigate(`/hskd/certify/${industrySlug}/scenarios`);
+      } else {
+        setError("Failed to complete training. Please try again.");
+      }
     } finally {
       setCompleting(false);
     }
@@ -121,7 +128,7 @@ export default function HskdTrainingPage() {
               disabled={completing || allComplete}
               className="px-6 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
             >
-              {completing ? "Saving…" : allComplete ? "✓ Training Complete" : "Acknowledge & Continue →"}
+              {completing ? "Saving…" : allComplete ? "✓ Training Complete — Redirecting…" : "Acknowledge & Continue →"}
             </button>
           </div>
         ) : (
@@ -165,7 +172,7 @@ export default function HskdTrainingPage() {
                     disabled={completing || allComplete}
                     className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
                   >
-                    {completing ? "Saving…" : allComplete ? "✓ Training Complete" : "Complete Training & Continue →"}
+                    {completing ? "Saving…" : allComplete ? "✓ Training Complete — Redirecting…" : "Complete Training & Continue →"}
                   </button>
                 </div>
               ) : (
