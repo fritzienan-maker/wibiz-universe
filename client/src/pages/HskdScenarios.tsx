@@ -13,28 +13,27 @@ interface Scenario {
   certification_prompt:    string | null;
 }
 
-interface ScenariosData {
-  scenarios:        Scenario[];
-  certification_id: string;
-  logs:             { scenario_id: string; decision: string }[];
-}
-
 export default function HskdScenariosPage() {
   const { industrySlug } = useParams<{ industrySlug: string }>();
-  const [data, setData]       = useState<ScenariosData | null>(null);
-  const [current, setCurrent] = useState(0);
-  const [submitting, setSub]  = useState(false);
-  const [rejected, setRejected] = useState(false);
-  const [error, setError]     = useState("");
+  const [certificationId, setCertificationId] = useState<string | null>(null);
+  const [scenarios, setScenarios]             = useState<Scenario[]>([]);
+  const [current, setCurrent]                 = useState(0);
+  const [submitting, setSub]                  = useState(false);
+  const [rejected, setRejected]               = useState(false);
+  const [error, setError]                     = useState("");
+  const [loading, setLoading]                 = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    apiFetch<ScenariosData>(`/client/hskd/scenarios?industry_slug=${industrySlug}`)
+    apiFetch<{ certification: { id: string; status: string } | null }>("/client/hskd/my-certification")
       .then((d) => {
-        setData(d);
-        // Resume from last approved
-        const approvedCount = d.logs.filter((l) => l.decision === "APPROVED").length;
-        setCurrent(approvedCount);
+        if (!d.certification) { navigate("/hskd", { replace: true }); return null; }
+        setCertificationId(d.certification.id);
+        return apiFetch<{ scenarios: Scenario[] }>(`/client/hskd/scenarios/${d.certification.id}`);
+      })
+      .then((res) => {
+        if (!res) return;
+        setScenarios(res.scenarios);
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
@@ -42,29 +41,27 @@ export default function HskdScenariosPage() {
         } else {
           setError("Failed to load scenarios. Please refresh.");
         }
-      });
+      })
+      .finally(() => setLoading(false));
   }, [industrySlug]);
 
   const handleDecision = async (decision: "APPROVED" | "REJECTED") => {
-    if (!data) return;
+    if (!certificationId || !scenarios[current]) return;
     setSub(true);
     try {
-      await apiFetch("/client/hskd/certify/scenario", {
-        method: "POST",
-        body: JSON.stringify({
-          certification_id: data.certification_id,
-          scenario_id:      data.scenarios[current]!.id,
-          decision,
-        }),
-      });
+      const res = await apiFetch<{ status?: string; remaining?: number }>(
+        `/client/hskd/scenarios/${certificationId}/decision?scenario_id=${scenarios[current]!.id}`,
+        {
+          method: "POST",
+          body: JSON.stringify({ decision }),
+        }
+      );
       if (decision === "REJECTED") {
         setRejected(true);
+      } else if (res.status === "PROHIBITED" || current + 1 >= scenarios.length) {
+        navigate(`/hskd/certify/${industrySlug}/prohibited`);
       } else {
-        if (current + 1 >= data.scenarios.length) {
-          navigate(`/hskd/certify/${industrySlug}/prohibited`);
-        } else {
-          setCurrent((c) => c + 1);
-        }
+        setCurrent((c) => c + 1);
       }
     } catch {
       setError("Failed to submit. Please try again.");
@@ -73,7 +70,7 @@ export default function HskdScenariosPage() {
     }
   };
 
-  if (!data) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">
         Loading…
@@ -102,7 +99,7 @@ export default function HskdScenariosPage() {
     );
   }
 
-  const scenario = data.scenarios[current];
+  const scenario = scenarios[current];
   if (!scenario) return null;
 
   return (
@@ -110,16 +107,15 @@ export default function HskdScenariosPage() {
       <header className="bg-card border-b border-border px-6 py-4 flex justify-between items-center">
         <span className="text-lg font-bold text-foreground">WiBiz Universe</span>
         <span className="text-sm text-muted-foreground">
-          Scenario {current + 1} of {data.scenarios.length}
+          Scenario {current + 1} of {scenarios.length}
         </span>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-8 space-y-6">
-        {/* Progress */}
         <div className="w-full bg-muted rounded-full h-1.5">
           <div
             className="bg-primary h-1.5 rounded-full transition-all duration-500"
-            style={{ width: `${((current) / data.scenarios.length) * 100}%` }}
+            style={{ width: `${(current / scenarios.length) * 100}%` }}
           />
         </div>
 
@@ -129,19 +125,16 @@ export default function HskdScenariosPage() {
           </div>
         )}
 
-        {/* Scenario header */}
         <div className="bg-card rounded-2xl border border-border p-6 space-y-5">
           <h2 className="text-lg font-bold text-foreground uppercase tracking-wide">
             Scenario {scenario.scenario_number} — {scenario.title}
           </h2>
 
-          {/* The Scenario */}
           <div className="space-y-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">The Scenario</p>
             <p className="text-sm text-foreground leading-relaxed">{scenario.scenario_text}</p>
           </div>
 
-          {/* The Danger */}
           {scenario.danger_text && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 space-y-1">
               <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest">⚠ The Danger</p>
@@ -149,7 +142,6 @@ export default function HskdScenariosPage() {
             </div>
           )}
 
-          {/* Prescribed Bot Response */}
           {scenario.prescribed_bot_response && (
             <div className="space-y-1">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Prescribed Bot Response</p>
@@ -159,7 +151,6 @@ export default function HskdScenariosPage() {
             </div>
           )}
 
-          {/* Mandatory Bot Action */}
           {scenario.mandatory_bot_action && (
             <div className="space-y-1">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Mandatory Bot Action</p>
@@ -167,14 +158,12 @@ export default function HskdScenariosPage() {
             </div>
           )}
 
-          {/* Certification prompt */}
           {scenario.certification_prompt && (
             <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
               <p className="text-sm text-foreground font-medium">{scenario.certification_prompt}</p>
             </div>
           )}
 
-          {/* Buttons */}
           <div className="grid grid-cols-2 gap-3 pt-2">
             <button
               onClick={() => handleDecision("REJECTED")}
