@@ -297,3 +297,164 @@ hskdClientRouter.get("/crisis-resources/:industrySlug", async (req: Request, res
     res.status(500).json({ error: err?.message ?? "Failed to fetch crisis resources" });
   }
 });
+
+// ─── NEW: GET /summary ────────────────────────────────────────────────────────
+// Used by HskdSummaryCard on the dashboard.
+// Returns the most advanced certification for the current user.
+
+hskdClientRouter.get("/summary", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const clientId = req.user?.userId;
+    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+    const result = await pool.query(
+      `SELECT cc.id, cc.status, cc.certificate_id, cc.training_completed_at,
+              cc.affirmation_submitted_at,
+              hi.name AS industry_name, hi.slug AS industry_slug
+       FROM client_certifications cc
+       JOIN hskd_industries hi ON hi.id = cc.industry_id
+       WHERE cc.client_id = $1
+       ORDER BY
+         CASE cc.status
+           WHEN 'CERTIFIED'    THEN 1
+           WHEN 'OPS_REVIEW'   THEN 2
+           WHEN 'AFFIRMATION'  THEN 3
+           WHEN 'PROHIBITED'   THEN 4
+           WHEN 'SCENARIOS'    THEN 5
+           WHEN 'TRAINING'     THEN 6
+           ELSE 7
+         END ASC,
+         cc.updated_at DESC
+       LIMIT 1`,
+      [clientId]
+    );
+
+    if (!result.rows.length) {
+      res.json({ status: "not_started", total_steps: 7 });
+      return;
+    }
+
+    const cert = result.rows[0] as any;
+
+    const statusMap: Record<string, string> = {
+      CERTIFIED:   "certified",
+      OPS_REVIEW:  "pending_review",
+      AFFIRMATION: "in_progress",
+      PROHIBITED:  "in_progress",
+      SCENARIOS:   "in_progress",
+      TRAINING:    "in_progress",
+    };
+    const widgetStatus = statusMap[cert.status] ?? "not_started";
+
+    let currentStep = 1;
+    if (widgetStatus === "in_progress") {
+      if (cert.training_completed_at)     currentStep = 2;
+
+      if (cert.status === "SCENARIOS") {
+        const approved = await pool.query(
+          `SELECT COUNT(*) as count FROM certification_scenario_logs WHERE certification_id = $1 AND decision = 'APPROVED'`,
+          [cert.id]
+        );
+        if (parseInt((approved.rows[0] as any).count) > 0) currentStep = 3;
+      }
+
+      if (cert.status === "PROHIBITED") {
+        const confirmed = await pool.query(
+          `SELECT COUNT(*) as count FROM certification_prohibited_logs WHERE certification_id = $1`,
+          [cert.id]
+        );
+        if (parseInt((confirmed.rows[0] as any).count) > 0) currentStep = 4;
+        else currentStep = 3;
+      }
+
+      if (cert.status === "AFFIRMATION") currentStep = 5;
+    }
+
+    res.json({
+      status:        widgetStatus,
+      industry_name: cert.industry_name,
+      industry_slug: cert.industry_slug,
+      certificate_id: cert.certificate_id ?? undefined,
+      current_step:  widgetStatus === "in_progress" ? currentStep : undefined,
+      total_steps:   7,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Failed to fetch summary" });
+  }
+});
+
+// ─── NEW: GET /certify/:industrySlug/status ───────────────────────────────────
+// Used by HskdCertificate.tsx — returns full status for the certificate page.
+
+hskdClientRouter.get("/certify/:industrySlug/status", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const clientId = req.user?.userId;
+    if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+    const certResult = await pool.query(
+      `SELECT cc.id, cc.status, cc.certificate_id,
+              cc.affirmation_legal_name   AS client_full_name,
+              cc.training_completed_at,
+              cc.affirmation_submitted_at,
+              cc.ops_signoff_at,
+              cc.specialist_mode_activated_at,
+              cc.notes                    AS rejection_note,
+              hi.name  AS industry_name,
+              hi.slug  AS industry_slug,
+              hi.tier
+       FROM client_certifications cc
+       JOIN hskd_industries hi ON hi.id = cc.industry_id
+       WHERE cc.client_id = $1 AND hi.slug = $2
+       ORDER BY cc.created_at DESC
+       LIMIT 1`,
+      [clientId, req.params.industrySlug]
+    );
+
+    if (!certResult.rows.length) {
+      res.status(404).json({ error: "No certification found for this industry." });
+      return;
+    }
+
+    const cert = certResult.rows[0] as any;
+
+    const scenariosResult = await pool.query(
+      `SELECT COUNT(*) AS approved_count FROM certification_scenario_logs WHERE certification_id = $1 AND decision = 'APPROVED'`,
+      [cert.id]
+    );
+    const scenariosApproved = parseInt((scenariosResult.rows[0] as any).approved_count) || 0;
+
+    const prohibitedResult = await pool.query(
+      `SELECT COUNT(*) AS confirmed_count FROM certification_prohibited_logs WHERE certification_id = $1`,
+      [cert.id]
+    );
+    const prohibitedConfirmed = parseInt((prohibitedResult.rows[0] as any).confirmed_count) || 0;
+
+    const affirmationSubmitted = ["OPS_REVIEW", "CERTIFIED", "REJECTED"].includes(cert.status);
+
+    const userResult = await pool.query(
+      `SELECT business_name FROM users WHERE id = $1 LIMIT 1`,
+      [clientId]
+    );
+    const businessName = (userResult.rows[0] as any)?.business_name ?? null;
+
+    res.json({
+      id:                            cert.id,
+      status:                        cert.status,
+      industry_name:                 cert.industry_name,
+      industry_slug:                 cert.industry_slug,
+      tier:                          cert.tier,
+      certificate_id:                cert.certificate_id,
+      client_full_name:              cert.client_full_name,
+      business_name:                 businessName,
+      specialist_mode_activated_at:  cert.specialist_mode_activated_at,
+      ops_signoff_at:                cert.ops_signoff_at,
+      training_completed_at:         cert.training_completed_at,
+      scenarios_approved:            scenariosApproved,
+      prohibited_confirmed:          prohibitedConfirmed,
+      affirmation_submitted:         affirmationSubmitted,
+      rejection_note:                cert.status === "REJECTED" ? cert.rejection_note : null,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Failed to fetch certification status" });
+  }
+});
