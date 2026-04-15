@@ -9,31 +9,43 @@ interface TrainingModule {
   content:       string | null;
   video_url:     string | null;
   is_active:     boolean;
-  completed:     boolean;
 }
 
-interface TrainingData {
-  modules:              TrainingModule[];
-  all_complete:         boolean;
-  certification_id:     string;
+interface Certification {
+  id:     string;
+  status: string;
 }
 
 export default function HskdTrainingPage() {
   const { industrySlug } = useParams<{ industrySlug: string }>();
-  const [data, setData]             = useState<TrainingData | null>(null);
-  const [activeModule, setActive]   = useState<TrainingModule | null>(null);
-  const [completing, setCompleting] = useState(false);
-  const [error, setError]           = useState("");
+  const [modules, setModules]           = useState<TrainingModule[]>([]);
+  const [certification, setCertification] = useState<Certification | null>(null);
+  const [activeModule, setActive]       = useState<TrainingModule | null>(null);
+  const [completing, setCompleting]     = useState(false);
+  const [allComplete, setAllComplete]   = useState(false);
+  const [error, setError]               = useState("");
+  const [loading, setLoading]           = useState(true);
   const navigate = useNavigate();
 
-  const load = () => {
-    apiFetch<TrainingData>(`/client/hskd/training?industry_slug=${industrySlug}`)
+  useEffect(() => {
+    apiFetch<{ certification: Certification | null }>("/client/hskd/my-certification")
       .then((d) => {
-        setData(d);
-        if (!activeModule) {
-          const first = d.modules.find((m) => !m.completed);
-          setActive(first ?? d.modules[0] ?? null);
+        if (!d.certification) {
+          navigate("/hskd", { replace: true });
+          return;
         }
+        setCertification(d.certification);
+        if (d.certification.status !== "TRAINING") {
+          // Already past training — go to next step
+          navigate(`/hskd/certify/${industrySlug}/scenarios`, { replace: true });
+          return;
+        }
+        return apiFetch<{ modules: TrainingModule[] }>(`/client/hskd/training/${d.certification.id}`);
+      })
+      .then((res) => {
+        if (!res) return;
+        setModules(res.modules);
+        setActive(res.modules[0] ?? null);
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
@@ -41,34 +53,30 @@ export default function HskdTrainingPage() {
         } else {
           setError("Failed to load training. Please refresh.");
         }
-      });
-  };
+      })
+      .finally(() => setLoading(false));
+  }, [industrySlug]);
 
-  useEffect(() => { load(); }, [industrySlug]);
-
-  const markComplete = async (moduleId: string) => {
+  const markComplete = async () => {
+    if (!certification) return;
     setCompleting(true);
     try {
-      await apiFetch(`/client/hskd/training/${moduleId}/complete`, { method: "POST" });
-      load();
+      await apiFetch(`/client/hskd/training/${certification.id}/complete`, { method: "POST" });
+      setAllComplete(true);
     } catch {
-      setError("Failed to mark complete. Please try again.");
+      setError("Failed to complete training. Please try again.");
     } finally {
       setCompleting(false);
     }
   };
 
-  if (!data) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">
         Loading…
       </div>
     );
   }
-
-  const completed = data.modules.filter((m) => m.completed).length;
-  const total     = data.modules.length;
-  const pct       = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -80,20 +88,13 @@ export default function HskdTrainingPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
-        {/* Progress */}
         <div className="bg-card rounded-2xl border border-border p-6 space-y-3">
-          <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold text-foreground">Training Modules</h1>
-            <span className="text-sm text-muted-foreground">{completed} of {total} complete</span>
-          </div>
-          <div className="w-full bg-muted rounded-full h-2">
-            <div
-              className="bg-primary h-2 rounded-full transition-all duration-500"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          {data.all_complete && (
-            <div className="flex justify-end">
+          <h1 className="text-xl font-bold text-foreground">Training Modules</h1>
+          <p className="text-sm text-muted-foreground">
+            Complete all training modules before proceeding to certification scenarios.
+          </p>
+          {(allComplete || modules.length === 0) && (
+            <div className="flex justify-end pt-2">
               <Link
                 to={`/hskd/certify/${industrySlug}/scenarios`}
                 className="text-sm px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
@@ -110,84 +111,71 @@ export default function HskdTrainingPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Module list */}
-          <div className="space-y-2">
-            {data.modules.map((m, idx) => {
-              const unlocked = idx === 0 || data.modules[idx - 1]?.completed;
-              return (
+        {modules.length === 0 ? (
+          <div className="bg-card rounded-xl border border-border p-8 text-center space-y-4">
+            <p className="text-muted-foreground text-sm">
+              No training modules have been configured for this industry yet.
+            </p>
+            <button
+              onClick={markComplete}
+              disabled={completing || allComplete}
+              className="px-6 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
+            >
+              {completing ? "Saving…" : allComplete ? "✓ Training Complete" : "Acknowledge & Continue →"}
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              {modules.map((m) => (
                 <button
                   key={m.id}
-                  onClick={() => unlocked && setActive(m)}
-                  disabled={!unlocked}
+                  onClick={() => setActive(m)}
                   className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
                     activeModule?.id === m.id
                       ? "border-primary/50 bg-primary/5"
-                      : unlocked
-                      ? "border-border bg-card hover:border-primary/30"
-                      : "border-border bg-card opacity-40 cursor-not-allowed"
+                      : "border-border bg-card hover:border-primary/30"
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">
-                      {m.module_number}. {m.title}
-                    </span>
-                    {m.completed ? (
-                      <span className="text-green-500 text-xs">✓</span>
-                    ) : !unlocked ? (
-                      <span className="text-muted-foreground text-xs">🔒</span>
-                    ) : null}
-                  </div>
+                  <span className="text-sm font-medium text-foreground">
+                    {m.module_number}. {m.title}
+                  </span>
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
 
-          {/* Module content */}
-          <div className="md:col-span-2">
-            {activeModule ? (
-              <div className="bg-card rounded-xl border border-border p-6 space-y-4">
-                <h2 className="text-lg font-semibold text-foreground">
-                  Module {activeModule.module_number}: {activeModule.title}
-                </h2>
-
-                {activeModule.video_url && (
-                  <div className="aspect-video rounded-lg overflow-hidden bg-muted">
-                    <iframe
-                      src={activeModule.video_url}
-                      className="w-full h-full"
-                      allowFullScreen
-                    />
-                  </div>
-                )}
-
-                {activeModule.content && (
-                  <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                    {activeModule.content}
-                  </div>
-                )}
-
-                {!activeModule.completed ? (
+            <div className="md:col-span-2">
+              {activeModule ? (
+                <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                  <h2 className="text-lg font-semibold text-foreground">
+                    Module {activeModule.module_number}: {activeModule.title}
+                  </h2>
+                  {activeModule.video_url && (
+                    <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+                      <iframe src={activeModule.video_url} className="w-full h-full" allowFullScreen />
+                    </div>
+                  )}
+                  {activeModule.content && (
+                    <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                      {activeModule.content}
+                    </div>
+                  )}
                   <button
-                    onClick={() => markComplete(activeModule.id)}
-                    disabled={completing}
+                    onClick={markComplete}
+                    disabled={completing || allComplete}
                     className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
                   >
-                    {completing ? "Saving…" : "Mark as Complete ✓"}
+                    {completing ? "Saving…" : allComplete ? "✓ Training Complete" : "Complete Training & Continue →"}
                   </button>
-                ) : (
-                  <div className="text-center text-sm text-green-600 font-medium py-2">
-                    ✓ Module Complete
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground text-sm">
-                Select a module to begin
-              </div>
-            )}
+                </div>
+              ) : (
+                <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground text-sm">
+                  Select a module to begin
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
