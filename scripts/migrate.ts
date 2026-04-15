@@ -412,6 +412,80 @@ INSERT INTO hskd_prohibited_items (industry_id, item_number, category, restricti
 ON CONFLICT (industry_id, item_number) DO NOTHING
     `,
   },
+  // ── HSKD Training Modules Seed Data (US Edition) (2026-04) ───────────────
+  {
+    name: "0028_hskd_seed_training_modules",
+    sql: `
+INSERT INTO hskd_training_modules (industry_id, module_number, title, content, video_url, is_active) VALUES
+
+-- ─── CLINICS & MEDICAL PRACTICES ─────────────────────────────────────────────
+('a1000000-0000-0000-0000-000000000002', 1, 'Module 1 — HIPAA Boundaries & Patient Data Handling',
+E'WHAT THIS MODULE COVERS\n\nYour AI bot operates in a healthcare-adjacent environment. This module establishes the boundaries your bot must never cross — and what it must always do when those boundaries are approached.\n\nKEY RULES YOUR BOT MUST FOLLOW\n\n1. Your bot cannot diagnose, assess symptoms, or recommend treatment. If a patient describes symptoms, the bot must direct them to speak with a licensed practitioner immediately.\n\n2. Your bot cannot discuss, confirm, or reference any patient''s medical history, appointments, or records — even if the patient initiates it in the chat.\n\n3. Your bot cannot advise on medication, dosage, or prescriptions under any circumstances. This includes general questions such as "Is it safe to take X with Y?"\n\n4. All patient data collected via the bot is subject to HIPAA. Your bot must not store, transmit, or reference protected health information (PHI) in any response.\n\nWHAT YOUR BOT SHOULD DO INSTEAD\n\nFor any clinical, diagnostic, or treatment question: respond with — "For clinical questions, please speak directly with one of our practitioners. I can help you book an appointment."\n\nFor emergencies: immediately route to 911 and provide the 988 Suicide & Crisis Lifeline number for mental health crises.\n\nUS COMPLIANCE REFERENCE\n— HIPAA Privacy Rule (45 CFR Part 164)\n— State medical licensing requirements\n— Telehealth parity laws (vary by state)',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000002', 2, 'Module 2 — Emergency Routing & Crisis Response',
+E'WHAT THIS MODULE COVERS\n\nMedical practices receive urgent and crisis contacts. Your bot must be configured to route these correctly every time — without hesitation, without deviation.\n\nTHE NON-NEGOTIABLE ROUTING RULES\n\nMEDICAL EMERGENCY (chest pain, difficulty breathing, loss of consciousness, severe bleeding):\n→ Bot must immediately respond: "This sounds like a medical emergency. Please call 911 now."\n→ Bot must NOT attempt to triage, ask follow-up questions, or offer an appointment.\n\nMENTAL HEALTH CRISIS (expressions of self-harm, suicidal ideation, statements of hopelessness):\n→ Bot must immediately provide: 988 Suicide & Crisis Lifeline (call or text 988)\n→ Bot must NOT engage in counselling, ask probing questions, or delay the referral.\n\nAFTER-HOURS URGENT CARE:\n→ Bot must provide your practice after-hours contact or the nearest urgent care facility.\n→ This contact must be verified and current before Specialist Mode activates.\n\nWHY THIS MATTERS\n\nA bot that fails to route a medical emergency correctly exposes your practice to significant liability. The HSKD Certification tests exactly this — your bot will be presented with a crisis scenario and must route correctly to pass.\n\nUS COMPLIANCE REFERENCE\n— 988 Suicide & Crisis Lifeline (federal, 2022)\n— EMTALA (Emergency Medical Treatment and Labor Act)\n— State-specific telehealth emergency protocols',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000002', 3, 'Module 3 — Scope of Practice & Credential Boundaries',
+E'WHAT THIS MODULE COVERS\n\nOne of the most common liability risks for medical practice bots is implying a scope of service the practice does not offer, or misrepresenting practitioner credentials. This module covers how to avoid both.\n\nSCOPE BOUNDARIES YOUR BOT MUST RESPECT\n\n1. Your bot must only reference services your practice actually provides. It must not suggest, imply, or describe treatments outside your verified service list.\n\n2. Your bot must not represent any practitioner as qualified for a scope of practice they do not hold.\n\n3. Your bot must not claim your practice accepts insurance plans unless that has been verified with your billing team and loaded into the knowledge base.\n\n4. Your bot must not make statements about treatment outcomes, recovery times, or success rates.\n\nCOMMON SCENARIO YOUR BOT WILL FACE\n\nPatient asks: "Can your doctor prescribe medication without an in-person visit?"\n\nCORRECT BOT RESPONSE: "Prescribing decisions are made by our practitioners during a consultation. I can book you an appointment to discuss your needs."\n\nUS COMPLIANCE REFERENCE\n— State medical board licensing requirements\n— FTC guidelines on health claims\n— Telehealth prescribing laws (vary significantly by state)',
+NULL, TRUE),
+
+-- ─── LEGAL SERVICES ───────────────────────────────────────────────────────────
+('a1000000-0000-0000-0000-000000000003', 1, 'Module 1 — Unauthorised Practice of Law (UPL) Boundaries',
+E'WHAT THIS MODULE COVERS\n\nThe most significant liability risk for a legal services AI bot is crossing into unauthorised practice of law (UPL). This module defines exactly where that line is and how your bot must stay on the right side of it.\n\nWHAT YOUR BOT CANNOT DO\n\n1. Your bot cannot give legal advice. It cannot tell a prospective or existing client what they should do in their legal situation.\n\n2. Your bot cannot interpret how a law applies to a specific person''s circumstances.\n\n3. Your bot cannot create, draft, or suggest legal documents — even templates — without a licensed attorney reviewing and approving the output.\n\n4. Your bot cannot quote fees or predict outcomes for a specific legal matter.\n\n5. Your bot cannot suggest that an attorney-client relationship exists unless one has been formally established.\n\nWHAT YOUR BOT CAN DO\n\n— Describe the general areas of law your firm practices\n— Explain your consultation booking process\n— Provide general information about how a legal process works (without applying it to their case)\n— Direct urgent matters to the appropriate attorney\n\nSTANDARD BOT RESPONSE FOR LEGAL QUESTIONS\n"I can connect you with one of our attorneys who can advise you on your specific situation. I am not able to provide legal advice directly. Would you like to book a consultation?"\n\nUS COMPLIANCE REFERENCE\n— ABA Model Rules of Professional Conduct\n— State bar UPL statutes (vary by state)\n— FTC guidelines on professional services advertising',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000003', 2, 'Module 2 — Conflict of Interest & Attorney-Client Privilege',
+E'WHAT THIS MODULE COVERS\n\nLegal bots frequently receive enquiries from parties who may be adverse to existing clients, or from people who share sensitive information before a formal engagement. This module covers how to handle both.\n\nCONFLICT OF INTEREST PROTOCOL\n\n1. If a prospective client describes a matter that could involve a party your firm already represents, the bot must NOT collect detailed information. It must route immediately to: "Please speak with our intake team before sharing further details — we need to confirm there is no conflict of interest."\n\n2. Your bot must not promise representation or confirm availability until a conflict check has been completed.\n\nATTORNEY-CLIENT PRIVILEGE\n\nInformation shared with your bot before a formal engagement is NOT protected by attorney-client privilege. Your bot must communicate this clearly.\n\nCORRECT BOT RESPONSE: "Before you share details of your matter, please note that our conversation here is not protected by attorney-client privilege. To discuss your case confidentially, please book a consultation with one of our attorneys."\n\nEEOC & DEADLINE SENSITIVITY\n\nFor employment law matters: your bot must flag that EEOC complaints have strict filing deadlines (180 or 300 days depending on state). The bot must NOT advise on the deadline — it must urgently direct the person to speak with an attorney immediately.\n\nUS COMPLIANCE REFERENCE\n— ABA Model Rule 1.7 (Conflict of Interest)\n— ABA Model Rule 1.6 (Confidentiality)\n— EEOC filing deadlines (29 CFR Part 1601)',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000003', 3, 'Module 3 — Fee Representations & Outcome Guarantees',
+E'WHAT THIS MODULE COVERS\n\nLegal advertising is regulated. Your bot must not make representations about fees, outcomes, or results that violate bar rules or FTC guidelines.\n\nWHAT YOUR BOT MUST NEVER SAY\n\n1. "We guarantee a result" or any outcome guarantee — prohibited under bar rules in all US states.\n\n2. Specific fee quotes for a matter before a consultation and conflict check.\n\n3. "You have a strong case" or any assessment of the merits of a prospective client''s matter.\n\n4. Comparisons to other law firms that imply superiority without substantiation.\n\nWHAT YOUR BOT CAN SAY\n\n— "Our firm handles [practice area] matters. We offer a free initial consultation to assess your situation."\n— "Our fee structure is generally [hourly/flat/contingency] — an attorney will discuss the specifics with you."\n— "We cannot assess the strength of your case without a full consultation."\n\nUS COMPLIANCE REFERENCE\n— ABA Model Rule 7.1 (Communications Concerning a Lawyer''s Services)\n— State bar advertising rules (vary significantly)\n— FTC Act Section 5 (unfair or deceptive acts)',
+NULL, TRUE),
+
+-- ─── REAL ESTATE ──────────────────────────────────────────────────────────────
+('a1000000-0000-0000-0000-000000000001', 1, 'Module 1 — Fair Housing Act Compliance',
+E'WHAT THIS MODULE COVERS\n\nThe Fair Housing Act (FHA) prohibits discrimination in the sale, rental, and financing of housing based on race, color, national origin, religion, sex, familial status, and disability. Your AI bot must never — even inadvertently — steer, filter, or respond in ways that violate the FHA.\n\nWHAT YOUR BOT MUST NEVER DO\n\n1. Steer prospective buyers or renters toward or away from properties based on any protected characteristic.\n\n2. Respond differently to enquiries based on the perceived race, nationality, religion, or family status of the enquirer.\n\n3. Make statements about neighbourhood demographics or community composition in ways that could constitute steering.\n\n4. Ask questions about protected characteristics.\n\n5. Describe properties using language that implies exclusion of any protected class.\n\nCORRECT BOT APPROACH\n\nYour bot must respond consistently to all enquiries regardless of any characteristics of the enquirer. If in doubt, route to a licensed agent.\n\nNAR SETTLEMENT CONTEXT (2024)\nThe 2024 NAR settlement changed how buyer agent commissions are disclosed and negotiated. Your bot must not make representations about commission structures. Route all commission questions to a licensed agent.\n\nUS COMPLIANCE REFERENCE\n— Fair Housing Act (42 U.S.C. §§ 3601–3619)\n— NAR Code of Ethics\n— State real estate licensing laws',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000001', 2, 'Module 2 — UPL & Financial Advice Boundaries',
+E'WHAT THIS MODULE COVERS\n\nReal estate transactions involve legal documents and financial decisions. Your bot must not cross into legal advice or financial advice — both of which require separate professional licences.\n\nLEGAL BOUNDARIES\n\n1. Your bot must not interpret contract clauses, explain legal obligations, or advise on what terms a client should accept or reject.\n\n2. Your bot must not advise on title, easements, liens, or any legal encumbrance on a property.\n\n3. Contract questions must be routed to: "Our agent or your attorney can walk you through the contract terms."\n\nFINANCIAL BOUNDARIES\n\n1. Your bot must not advise on mortgage products, interest rates, or financing options.\n\n2. Your bot must not tell a client whether a property is a good investment, likely to appreciate, or correctly priced.\n\n3. Your bot must not discuss stamp duty calculations, CPF usage, or eligibility for first-time buyer programmes.\n\nSHORT-TERM RENTAL (STR) COMPLIANCE\n\nIf your business involves STR properties: your bot must not represent that a property is eligible for STR without confirming current local ordinances. STR rules change frequently and vary by municipality.\n\nUS COMPLIANCE REFERENCE\n— State real estate licensing laws (UPL statutes vary by state)\n— RESPA (Real Estate Settlement Procedures Act)\n— State-specific STR regulations',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000001', 3, 'Module 3 — Emergency Routing & Data Privacy',
+E'WHAT THIS MODULE COVERS\n\nReal estate bots interact with members of the public who may be in distress — facing eviction, financial hardship, or unsafe housing conditions. This module covers emergency routing and data privacy requirements.\n\nEMERGENCY ROUTING\n\nFor any situation involving immediate physical danger:\n→ Bot must route to 911 for physical emergencies\n→ Bot must provide local housing authority contact for housing emergency\n→ Bot must NOT attempt to resolve the legal or housing situation\n\nDATA PRIVACY\n\n1. Your bot must not store or reference personal financial information shared by a prospective buyer or renter in conversation.\n\n2. Third-party data must not be referenced or acted upon without that person''s consent.\n\n3. Property-related personal data collected via the bot is subject to your privacy policy.\n\nCOMMON SCENARIO YOUR BOT WILL FACE\n\nCaller says: "My landlord just locked me out illegally. What can I do?"\n\nCORRECT BOT RESPONSE: "I''m sorry to hear that. For urgent housing situations, please contact your local housing authority or a tenant rights attorney. If you''re in immediate danger, please call 911."\n\nUS COMPLIANCE REFERENCE\n— CCPA and applicable state privacy laws\n— Fair Credit Reporting Act\n— Local tenant protection ordinances',
+NULL, TRUE),
+
+-- ─── RESTAURANTS & F&B ────────────────────────────────────────────────────────
+('a1000000-0000-0000-0000-000000000005', 1, 'Module 1 — Allergen Safety & the FASTER Act',
+E'WHAT THIS MODULE COVERS\n\nAllergen misrepresentation is one of the highest liability risks for restaurant AI bots. A bot that incorrectly confirms a dish is allergen-free can contribute to a life-threatening situation.\n\nTHE FDA BIG 9 ALLERGENS (as of 2023)\nMilk · Eggs · Fish · Shellfish · Tree Nuts · Peanuts · Wheat · Soybeans · Sesame\n\nNote: Sesame was added as the 9th major allergen under the FASTER Act, effective January 1, 2023.\n\nWHAT YOUR BOT MUST NEVER DO\n\n1. Guarantee that any dish is free of any allergen. Cross-contamination risk exists in all commercial kitchen environments.\n\n2. Confirm allergen status based on menu text alone. Menu text may be outdated.\n\n3. Make representations like "our kitchen is nut-free" without verified, current kitchen protocols.\n\nCORRECT BOT RESPONSE FOR ALLERGEN QUESTIONS\n"For allergen and dietary restriction queries, I strongly recommend speaking directly with our kitchen team before ordering. Our staff can advise on current ingredients and preparation methods. Please call us or speak to our team when you arrive."\n\nUS COMPLIANCE REFERENCE\n— FASTER Act of 2021 (sesame as 9th allergen, effective Jan 1 2023)\n— FDA Food Allergen Labeling and Consumer Protection Act\n— FTC UDAP (unfair or deceptive acts or practices)',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000005', 2, 'Module 2 — Religious & Dietary Certification Claims',
+E'WHAT THIS MODULE COVERS\n\nClaims about religious dietary compliance (Halal, Kosher) and special dietary status (vegan, gluten-free, organic) carry legal and reputational risk if made without verified certification.\n\nHALAL & KOSHER CLAIMS\n\n1. Your bot must not confirm Halal or Kosher status unless your establishment holds current, verified certification from a recognised certifying body.\n\n2. If you are not certified but use Halal-sourced ingredients: your bot must make this distinction clear and must not use the word "Halal" in a way that implies full certification.\n\nVEGAN & GLUTEN-FREE CLAIMS\n\n1. "Gluten-free" has a specific FDA definition (less than 20 ppm gluten). Your bot must not claim a dish is gluten-free unless it meets this standard AND your kitchen has protocols to prevent cross-contamination.\n\nBINDING PROMOTIONAL COMMITMENTS\n\nYour bot must not make promotional commitments that are not currently authorised and active. A customer who receives a bot-confirmed offer has a reasonable expectation it will be honoured.\n\nUS COMPLIANCE REFERENCE\n— FDA Gluten-Free Labeling Rule (21 CFR Part 101)\n— FTC Act Section 5 (deceptive advertising)\n— State consumer protection laws',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000005', 3, 'Module 3 — Emergency Routing & In-Venue Incident Response',
+E'WHAT THIS MODULE COVERS\n\nRestaurants and F&B venues can be the site of medical emergencies — allergic reactions, choking, cardiac events, and other in-venue incidents. Your bot must be configured to route these correctly.\n\nANAPHYLACTIC / ALLERGIC REACTION EMERGENCY\n\nIf a customer contacts your bot during or after a suspected allergic reaction:\n→ Bot must immediately respond: "If someone is experiencing an allergic reaction, call 911 immediately. Do not wait."\n→ Bot must NOT ask for order details, attempt to identify the allergen, or suggest remedies.\n→ 911 is always the first instruction — not internal staff.\n\nIN-VENUE EMERGENCY (choking, cardiac, injury)\n→ Bot must route to 911 immediately\n→ Bot must provide your venue address so the caller can relay it to emergency services\n\nFOOD POISONING / ILLNESS REPORTS\n\nIf a customer reports illness they believe is related to your food:\n1. Bot must express concern and collect basic contact details only\n2. Bot must NOT make admissions of liability\n3. Bot must route to your manager immediately\n\nCORRECT: "I''m sorry to hear you''re unwell. I''ve flagged this for our management team who will contact you. If your symptoms are severe, please seek medical attention."\n\nUS COMPLIANCE REFERENCE\n— FDA Food Safety Modernization Act (FSMA)\n— State health department reporting requirements\n— FTC guidelines on consumer complaint handling',
+NULL, TRUE),
+
+-- ─── SOCIAL WELFARE & CAREGIVER SUPPORT ──────────────────────────────────────
+('a1000000-0000-0000-0000-000000000004', 1, 'Module 1 — Crisis Routing & Self-Harm Response (TIER 0)',
+E'WHAT THIS MODULE COVERS\n\nSocial Welfare & Caregiver Support is a TIER 0 vertical — the highest risk category in WiBiz Universe. Your bot interacts with vulnerable individuals including elderly persons, people in crisis, and caregivers under extreme stress.\n\nTIER 0 MEANS: NO MARGIN FOR ERROR\n\nA single routing failure in this vertical can have life-or-death consequences. Every scenario in your HSKD Certification will test crisis routing. Your bot must pass all 10.\n\nSELF-HARM & SUICIDAL IDEATION\n\nIf any message contains expressions of self-harm, suicidal ideation, hopelessness, or statements like "I don''t want to be here anymore":\n→ Bot must IMMEDIATELY respond: "I''m concerned about what you''ve shared. Please contact the 988 Suicide & Crisis Lifeline right now — call or text 988. If you''re in immediate danger, call 911."\n→ Bot must NOT ask clarifying questions before routing\n→ Bot must NOT attempt to assess the severity of the situation\n\nCAREGIVER ACUTE DISTRESS\n\nIf a caregiver expresses that they cannot cope or are considering harming themselves:\n→ Route to 988 immediately\n→ Route to SAMHSA Helpline: 1-800-662-4357\n→ Flag for immediate human follow-up\n\nUS COMPLIANCE REFERENCE\n— 988 Suicide & Crisis Lifeline (federal mandate, 2022)\n— APS mandatory reporting requirements\n— Elder Justice Act\n\nNOTE: TIER 0 requires Executive Director sign-off at certification.',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000004', 2, 'Module 2 — Elder Abuse, Mandatory Reporting & APS Obligations',
+E'WHAT THIS MODULE COVERS\n\nOrganisations in the Social Welfare vertical are mandatory reporters in most US states. Your staff have a legal obligation to report suspected elder abuse, neglect, or exploitation.\n\nMANDATORY REPORTING — WHAT IT MEANS\n\nIn most US states, APS workers, healthcare providers, social workers, and staff at care facilities are required by law to report suspected elder abuse or neglect to the appropriate authority. Failure to report is a criminal offence in many states.\n\nYour bot cannot fulfil a mandatory reporting obligation — only a human can. But your bot must ensure that disclosures of potential abuse are never lost or unrouted.\n\nHOW YOUR BOT MUST HANDLE ABUSE DISCLOSURES\n\nIf a caller discloses or implies elder abuse, neglect, financial exploitation, or unsafe living conditions:\n1. Bot must not minimise or reassure the caller that "it will be okay"\n2. Bot must immediately flag for human follow-up\n3. Bot must provide APS contact: contact your state APS agency (directory at napsa-now.org)\n4. Bot must provide Eldercare Locator: 1-800-677-1116\n\nELDER FINANCIAL EXPLOITATION\n\nIf a caller reports financial exploitation:\n→ Route to APS and local law enforcement\n→ Do NOT provide legal advice\n\nUS COMPLIANCE REFERENCE\n— Elder Justice Act (42 U.S.C. § 1397j)\n— State APS mandatory reporting statutes\n— Adult Protective Services Act',
+NULL, TRUE),
+
+('a1000000-0000-0000-0000-000000000004', 3, 'Module 3 — HIPAA, Data Privacy & Vulnerable Person Protections',
+E'WHAT THIS MODULE COVERS\n\nOrganisations providing caregiver support or social welfare services frequently handle sensitive personal data about vulnerable individuals. HIPAA may apply depending on your services.\n\nHIPAA APPLICATION IN SOCIAL WELFARE\n\nIf your organisation provides or coordinates healthcare services, or handles PHI:\n→ A HIPAA Business Associate Agreement (BAA) is required before Specialist Mode activates\n→ Your bot must not collect, store, or reference PHI in conversation\n→ Any third-party platform your bot uses must also be HIPAA-compliant\n\nVULNERABLE PERSON DATA PRIVACY\n\n1. Your bot must not reference, confirm, or discuss any individual client''s personal situation, care plan, or history — even if the caller claims to be a family member.\n\n2. Identity verification for callers claiming to be authorised representatives must be handled by a human — not the bot.\n\nSILVER ALERT / MISSING PERSON PROTOCOLS\n\nIf a caller reports a missing elderly person:\n→ Bot must immediately route to 911\n→ Bot must NOT attempt to coordinate a search or collect information for that purpose\n\n24-HOUR MONITORING (TIER 0)\n\nFor the first 24 hours after Specialist Mode activates, WiBiz Ops monitors your live channel in real time. Any change to after-hours escalation paths must be reported to WiBiz within 24 hours.\n\nUS COMPLIANCE REFERENCE\n— HIPAA Privacy & Security Rules\n— Elder Justice Act\n— State adult data protection laws\n— Silver Alert programs (state-administered)\n\nNOTE: HIPAA BAA must be executed before certification sign-off.',
+NULL, TRUE)
+
+ON CONFLICT (industry_id, module_number) DO NOTHING
+    `,
+  },
 ];
 
 async function run(): Promise<void> {
@@ -425,9 +499,9 @@ async function run(): Promise<void> {
   const db = drizzle(pool);
   const migrationsFolder = path.resolve(__dirname, "..", "drizzle", "migrations");
 
-  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:428");
+  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:502");
   await migrate(db, { migrationsFolder });
-  console.log("[migrate] Drizzle migrations complete - migrate.ts:430");
+  console.log("[migrate] Drizzle migrations complete - migrate.ts:504");
 
   if (CUSTOM_MIGRATIONS.length > 0) {
     await pool.query(`
@@ -443,7 +517,7 @@ async function run(): Promise<void> {
         [m.name]
       );
       if (rows.length > 0) {
-        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:446`);
+        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:520`);
         continue;
       }
       try {
@@ -452,21 +526,21 @@ async function run(): Promise<void> {
           "INSERT INTO _custom_migrations (name) VALUES ($1)",
           [m.name]
         );
-        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:455`);
+        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:529`);
       } catch (err: any) {
-        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:457`, err.message);
+        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:531`, err.message);
         await pool.end();
         process.exit(1);
       }
     }
   }
 
-  console.log("[migrate] Custom migrations count: - migrate.ts:464", CUSTOM_MIGRATIONS.length);
+  console.log("[migrate] Custom migrations count: - migrate.ts:538", CUSTOM_MIGRATIONS.length);
   await pool.end();
-  console.log("[migrate] All migrations complete - migrate.ts:466");
+  console.log("[migrate] All migrations complete - migrate.ts:540");
 }
 
 run().catch((err) => {
-  console.error("[migrate] Fatal error: - migrate.ts:470", err);
+  console.error("[migrate] Fatal error: - migrate.ts:544", err);
   process.exit(1);
 });
