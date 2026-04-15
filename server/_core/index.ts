@@ -10,6 +10,7 @@ import { dashboardRouter }   from "../routes/dashboard";
 import { adminRouter }       from "../routes/admin";
 import { hskdRouter }        from "../routes/hskd";
 import { hskdClientRouter }  from "../routes/hskd-client";
+import { botCertRouter }     from "../routes/bot-cert";
 import { progressRouter }    from "../routes/progress";
 import { quizRouter }        from "../routes/quiz";
 import { teamRouter, inviteRouter } from "../routes/team";
@@ -41,19 +42,20 @@ app.get("/api/health", (_req, res) => {
 });
 
 // ─── API routes ───────────────────────────────────────────────────────────────
-app.use("/api/auth",         authRouter);
-app.use("/api/auth/invite",  inviteRouter);
-app.use("/api/webhooks",     webhookRouter);
-app.use("/api/dashboard",    dashboardRouter);
-app.use("/api/admin",        adminRouter);
-app.use("/api/admin/hskd",   hskdRouter);
-app.use("/api/client/hskd",  hskdClientRouter);
-app.use("/api/progress",     progressRouter);
-app.use("/api/quiz",         quizRouter);
-app.use("/api/team",         teamRouter);
-app.use("/api/support",      supportRouter);
-app.use("/api/resources",    resourcesPublicRouter);
-app.use("/api/staff",        staffRouter);
+app.use("/api/auth",           authRouter);
+app.use("/api/auth/invite",    inviteRouter);
+app.use("/api/webhooks",       webhookRouter);
+app.use("/api/dashboard",      dashboardRouter);
+app.use("/api/admin",          adminRouter);
+app.use("/api/admin/hskd",     hskdRouter);
+app.use("/api/client/hskd",    hskdClientRouter);
+app.use("/api/client/bot-cert", botCertRouter);
+app.use("/api/progress",       progressRouter);
+app.use("/api/quiz",           quizRouter);
+app.use("/api/team",           teamRouter);
+app.use("/api/support",        supportRouter);
+app.use("/api/resources",      resourcesPublicRouter);
+app.use("/api/staff",          staffRouter);
 
 // ─── Frontend (Vite dev middleware or static build) ───────────────────────────
 async function startServer(): Promise<void> {
@@ -64,12 +66,12 @@ async function startServer(): Promise<void> {
   }
 
   server.listen(ENV.port, () => {
-    console.log(`[server] WiBiz Academy listening on http://localhost:${ENV.port} - index.ts:67`);
-    console.log(`[server] Mode: ${ENV.isProduction ? "production" : "development"} - index.ts:68`);
+    console.log(`[server] WiBiz Academy listening on http://localhost:${ENV.port} - index.ts:69`);
+    console.log(`[server] Mode: ${ENV.isProduction ? "production" : "development"} - index.ts:70`);
   });
 }
 
 startServer().catch((err) => {
-  console.error("[server] Fatal startup error: - index.ts:73", err);
+  console.error("[server] Fatal startup error: - index.ts:75", err);
   process.exit(1);
 });
