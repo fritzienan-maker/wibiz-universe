@@ -1,17 +1,18 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import LoginPage       from "./pages/Login";
-import ClientPortal    from "./pages/ClientPortal";
-import AdminPage       from "./pages/Admin";
-import InviteAccept    from "./pages/InviteAccept";
-import PrivacyPolicy   from "./pages/PrivacyPolicy";
-import Terms           from "./pages/Terms";
-import HskdPage        from "./pages/Hskd";
-import HskdTraining    from "./pages/HskdTraining";
-import HskdScenarios   from "./pages/HskdScenarios";
-import HskdProhibited  from "./pages/HskdProhibited";
-import HskdAffirmation from "./pages/HskdAffirmation";
-import HskdCertificate from "./pages/HskdCertificate";
+import LoginPage           from "./pages/Login";
+import ClientPortal        from "./pages/ClientPortal";
+import AdminPage           from "./pages/Admin";
+import InviteAccept        from "./pages/InviteAccept";
+import PrivacyPolicy       from "./pages/PrivacyPolicy";
+import Terms               from "./pages/Terms";
+import HskdPage            from "./pages/Hskd";
+import HskdTraining        from "./pages/HskdTraining";
+import HskdScenarios       from "./pages/HskdScenarios";
+import HskdProhibited      from "./pages/HskdProhibited";
+import HskdAffirmation     from "./pages/HskdAffirmation";
+import HskdCertificate     from "./pages/HskdCertificate";
+import BotCertification    from "./pages/BotCertification";
 import { apiFetch, ApiError } from "./lib/api";
 
 // ─── Auth state hook ──────────────────────────────────────────────────────────
@@ -76,7 +77,11 @@ export default function App() {
         <Route path="/dashboard" element={<PrivateRoute><ClientPortal /></PrivateRoute>} />
         <Route path="/admin"     element={<AdminRoute><AdminPage /></AdminRoute>} />
 
-        {/* ── HSKD ClearPath Certification ── */}
+        {/* ── Phase 2: Bot Certification ── */}
+        <Route path="/bot-certification"
+          element={<PrivateRoute><BotCertification /></PrivateRoute>} />
+
+        {/* ── Phase 3: HSKD ClearPath Certification ── */}
         <Route path="/hskd"
           element={<PrivateRoute><HskdPage /></PrivateRoute>} />
         <Route path="/hskd/certify/:industrySlug/training"
