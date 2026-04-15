@@ -17,6 +17,7 @@ export default function HskdAffirmationPage() {
 
   const [certId,       setCertId]     = useState<string | null>(null);
   const [industryName, setIndustryName] = useState("");
+  const [actualSlug,   setActualSlug]  = useState<string>("");
   const [loading,      setLoading]    = useState(true);
   const [submitting,   setSub]        = useState(false);
   const [error,        setError]      = useState("");
@@ -63,6 +64,7 @@ export default function HskdAffirmationPage() {
 
         setCertId(cert.id);
         setIndustryName(cert.industry_name);
+        setActualSlug(cert.industry_slug);
         setLoading(false);
       })
       .catch((err) => {
@@ -94,8 +96,8 @@ export default function HskdAffirmationPage() {
           hipaa_baa_date:             hipaaDate     || null,
         }),
       });
-      // Navigate to status page instead of showing inline message
-      navigate(`/hskd/certify/${industrySlug}/status`);
+      // Navigate to status page using actual cert industry slug
+      navigate(`/hskd/certify/${actualSlug || industrySlug}/status`);
     } catch {
       setError("Failed to submit affirmation. Please try again.");
     } finally {
