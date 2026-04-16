@@ -454,9 +454,9 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
         <h2>Welcome back, {user.firstName ?? displayName}.</h2>
         <p>
           {programmeComplete
-            ? "You have completed your WiBiz Academy — 30-Module Activation Programme. Congratulations!"
+            ? "You have completed your WiBiz Universe — 30-Module Activation Programme. Congratulations!"
             : nextExercise
-            ? `You are on Module ${nextExercise.dayNumber ?? "—"} of your WiBiz Academy — 30-Module Activation Programme. Keep going.`
+            ? `You are on Module ${nextExercise.dayNumber ?? "—"} of your WiBiz Universe — 30-Module Activation Programme. Keep going.`
             : stats.totalModules === 0
             ? "Your programme is being set up. Check back soon."
             : "Your programme is ready. Get started below."}
@@ -504,7 +504,7 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
             <div className="p-ci" onClick={() => onTabChange("programme")} style={{ cursor: "pointer" }}>
               <div className="p-ci-icon ic-30">30</div>
               <div className="p-ci-info">
-                <div className="p-ci-name">WiBiz Academy — 30-Module Activation Programme</div>
+                <div className="p-ci-name">WiBiz Universe — 30-Module Activation Programme</div>
                 <div className="p-ci-meta">
                   {stats.completedExercises} of {stats.totalExercises} exercises ·{" "}
                   {stats.totalModules} module gate sign-offs
@@ -654,7 +654,7 @@ function TabProgramme({
   return (
     <>
       <div className="p-greet">
-        <h2>WiBiz Academy — 30-Module Activation Programme</h2>
+        <h2>WiBiz Universe — 30-Module Activation Programme</h2>
         <p>
           Work through your exercises in order. Submit a written proof (and optionally a screenshot) for each exercise.
           Our team reviews each submission — you'll see Approved, Pending Review, or Rejected with feedback.
@@ -1258,11 +1258,11 @@ function TabResources({ user, onTabChange }: { user: DashboardData["user"]; onTa
 
   return (
     <>
-      <div className="p-greet"><h2>Resources</h2><p>Academy materials, support articles, and sign-off documents.</p></div>
+      <div className="p-greet"><h2>Resources</h2><p>Universe resources, support articles, and sign-off documents.</p></div>
       <div className="p-two-col">
         <div>
           <div className="p-card">
-            <div className="p-card-title">Academy Resources</div>
+            <div className="p-card-title">Universe Resources</div>
             {resLoading ? <div style={{ fontSize: 12, color: "var(--ts)", padding: "8px 0" }}>Loading…</div> : resources.length > 0 ? resources.map((r) => (
               r.url ? <a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}><div className="p-ci"><div className={`p-ci-icon ${r.category === "video" ? "ic-loom" : "ic-res"}`}>{r.icon || (r.category === "video" ? "▶" : "R")}</div><div className="p-ci-info"><div className="p-ci-name">{r.title}</div>{r.description && <div className="p-ci-meta">{r.description}</div>}</div><span className="p-badge b-prog">{r.category === "video" ? "Watch" : "Open"}</span></div></a>
               : <div key={r.id} className="p-ci"><div className={`p-ci-icon ${r.category === "video" ? "ic-loom" : "ic-res"}`}>{r.icon || (r.category === "video" ? "▶" : "R")}</div><div className="p-ci-info"><div className="p-ci-name">{r.title}</div>{r.description && <div className="p-ci-meta">{r.description}</div>}</div><span className="p-badge b-prog">{r.category === "video" ? "Watch" : "Open"}</span></div>
