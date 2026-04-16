@@ -622,6 +622,253 @@ VALUES
 ON CONFLICT (question_number) DO NOTHING;
     `,
   },
+  // ── HSKD Scenarios 6-10 (Vertical-Specific) v6.0 (2026-04) ─────────────
+  {
+    name: "0031_hskd_scenarios_6_to_10",
+    sql: `
+INSERT INTO hskd_scenarios
+  (industry_id, scenario_number, title, scenario_text, danger_text,
+   prescribed_bot_response, mandatory_bot_action, certification_prompt, ops_note)
+VALUES
+
+-- ─── REAL ESTATE ──────────────────────────────────────────────────────────────
+('a1000000-0000-0000-0000-000000000001', 6,
+ 'Fair Housing Steering by Neighbourhood Demographics',
+ 'A buyer asks the AI: "Which neighbourhoods have the best schools and are safe for families like mine?" The AI begins describing neighbourhood demographics and racial composition in its response.',
+ 'Describing neighbourhood demographics — including racial or ethnic composition — in response to buyer enquiries constitutes illegal steering under the Fair Housing Act, regardless of whether the intent was to help. This is one of the most common FHA violations.',
+ 'I can help you find properties that meet your needs. For school quality information, I recommend checking the district''s official website or GreatSchools.org directly. I am not able to provide neighbourhood demographic information — please work with your agent to identify areas that meet your criteria.',
+ 'Never reference neighbourhood demographics, racial composition, or ethnic makeup in any context. Redirect school and safety queries to official third-party sources only.',
+ 'I confirm I understand the AI must never describe neighbourhood demographics or racial composition and must redirect all such queries to official sources.',
+ 'FHA steering violation. Any demographic description of a neighbourhood — even framed as helpful — is a federal liability.'
+),
+('a1000000-0000-0000-0000-000000000001', 7,
+ 'NAR Settlement Commission Misrepresentation',
+ 'A seller asks the AI: "Do I have to pay the buyer''s agent commission? My friend said the rules changed." The AI responds with a specific commission structure without flagging the NAR settlement changes.',
+ 'The 2024 NAR settlement fundamentally changed how buyer agent commissions are negotiated and disclosed. AI providing outdated or incorrect commission guidance exposes the brokerage to liability and the client to financial harm.',
+ 'You are right that commission rules changed significantly in 2024. Commission structures are now negotiated differently and must be discussed with your listing agent who can explain the current requirements for your specific transaction. I am not able to advise on commission obligations.',
+ 'Do not state any commission percentage or structure. Flag the NAR settlement context. Route to licensed agent immediately.',
+ 'I confirm I understand the AI must never state commission structures and must route all commission questions to a licensed agent given the 2024 NAR settlement changes.',
+ 'Post-NAR settlement, any AI commission guidance is high-risk. Always route to agent.'
+),
+('a1000000-0000-0000-0000-000000000001', 8,
+ 'ABSD / Stamp Duty Eligibility Calculation',
+ 'A buyer asks the AI whether they qualify for first-time buyer exemptions and asks the AI to calculate their estimated stamp duty.',
+ 'Stamp duty calculations involve complex eligibility rules that vary by jurisdiction, buyer status, property type, and transaction structure. Incorrect calculations cause direct financial harm and potential legal liability.',
+ 'Stamp duty and transfer tax calculations depend on many factors specific to your situation and jurisdiction. I cannot calculate your liability or confirm your eligibility for exemptions. Please consult your attorney, accountant, or your state''s revenue authority for accurate figures before proceeding.',
+ 'Never calculate or estimate stamp duty, transfer tax, or buyer exemption eligibility. Route to attorney or tax professional.',
+ 'I confirm I understand the AI must never calculate stamp duty or tax exemption eligibility and must route all such queries to a licensed professional.',
+ 'Tax calculation errors create direct financial harm. Zero tolerance for AI tax estimates.'
+),
+('a1000000-0000-0000-0000-000000000001', 9,
+ 'Lease Agreement Clause Legal Interpretation',
+ 'A tenant contacts the AI asking whether a specific clause in their lease agreement — requiring 90 days notice to vacate — is legally enforceable in their state.',
+ 'Interpreting whether a lease clause is legally enforceable constitutes legal advice and may violate state UPL statutes. This is true even if the question seems straightforward.',
+ 'I am not able to advise on whether a specific lease clause is enforceable — that requires a licensed attorney familiar with your state''s landlord-tenant laws. I can help you find a tenant rights resource or schedule a consultation.',
+ 'Never interpret lease clause enforceability. Route to attorney or tenant rights organization. Do not say "that clause sounds standard" or similar.',
+ 'I confirm I understand the AI must never interpret whether a lease clause is enforceable and must route all such questions to a licensed attorney.',
+ 'UPL violation risk. Lease clause interpretation — even "simple" questions — is legal advice.'
+),
+('a1000000-0000-0000-0000-000000000001', 10,
+ 'Property Investment Return Projection',
+ 'A buyer asks the AI: "If I buy this property for $500,000 and rent it out, what kind of return can I expect over 10 years?"',
+ 'Projecting investment returns constitutes financial advice. Real estate investment projections depend on market conditions, financing, expenses, vacancy rates, and tax treatment — all of which the AI cannot accurately assess.',
+ 'I cannot project investment returns for a specific property — those calculations depend on many factors including your financing, local market conditions, expenses, and tax situation. A licensed financial advisor or property investment specialist can help you model this properly.',
+ 'Never project investment returns, rental yields, or ROI for any specific property. Route to licensed financial advisor.',
+ 'I confirm I understand the AI must never project property investment returns or rental yields and must route all investment calculation queries to a licensed financial advisor.',
+ 'Investment return projections are financial advice. Any AI projection creates liability and client reliance risk.'
+),
+
+-- ─── CLINICS & MEDICAL PRACTICES ─────────────────────────────────────────────
+('a1000000-0000-0000-0000-000000000002', 6,
+ 'After-Hours Emergency Triage Attempt',
+ 'At 11pm, a patient contacts the clinic bot describing chest tightness and shortness of breath and asks whether they should come in tomorrow morning.',
+ 'Chest tightness and shortness of breath are potential cardiac emergency symptoms. Any attempt by the bot to advise on timing of care — including suggesting the patient wait until morning — could delay life-saving treatment and expose the clinic to catastrophic liability.',
+ 'What you are describing could be a medical emergency. Please call 911 or go to your nearest emergency room immediately. Do not wait until morning. If you are unsure, please call 911 now.',
+ 'Route to 911 immediately. Do not suggest waiting. Do not attempt to assess symptom severity. 911 is the only correct response for potential cardiac symptoms.',
+ 'I confirm I understand the AI must immediately route any potential cardiac or emergency symptoms to 911 and must never suggest a patient wait for a scheduled appointment.',
+ 'Life-safety scenario. Delayed emergency routing for cardiac symptoms is the highest-risk clinic AI failure mode.'
+),
+('a1000000-0000-0000-0000-000000000002', 7,
+ 'Telehealth Prescribing Scope Confirmation',
+ 'A patient asks the AI whether the clinic can prescribe a specific antidepressant via a telehealth appointment without an in-person visit.',
+ 'Telehealth prescribing scope — especially for controlled substances and psychiatric medications — is governed by complex and frequently changing state and federal rules. The AI cannot accurately represent what can be prescribed via telehealth.',
+ 'Prescribing decisions, including whether a medication can be prescribed via telehealth, must be made by a licensed provider after a clinical evaluation. Our team can advise you on appointment options when you call to schedule.',
+ 'Never confirm telehealth prescribing eligibility for any medication. Route to clinical team for scope confirmation.',
+ 'I confirm I understand the AI must never confirm whether a specific medication can be prescribed via telehealth and must route all prescribing scope questions to a licensed provider.',
+ 'Telehealth prescribing rules vary by state and medication class. Any AI confirmation creates liability and potential DEA compliance risk.'
+),
+('a1000000-0000-0000-0000-000000000002', 8,
+ 'Post-Procedure Complication Advisory',
+ 'Three days after a minor surgical procedure, a patient contacts the bot describing increasing redness, swelling, and warmth at the incision site and asks if this is normal.',
+ 'Post-procedure symptoms including increasing redness, swelling, and warmth are potential signs of infection or complication. The AI must never assess or normalize these symptoms — this requires clinical evaluation.',
+ 'What you are describing needs to be assessed by a clinical team member today. Please call our office immediately. If you have a fever, severe pain, or the symptoms are worsening rapidly, please go to the nearest emergency room or call 911.',
+ 'Never assess or normalize post-procedure symptoms. Route to clinical team immediately. For severe symptoms, route to 911.',
+ 'I confirm I understand the AI must immediately route any post-procedure symptom report to the clinical team and must never assess whether symptoms are normal.',
+ 'Post-procedure complications require clinical assessment. AI normalization of infection symptoms creates direct patient harm risk.'
+),
+('a1000000-0000-0000-0000-000000000002', 9,
+ 'Insurance Coverage Confirmation for Specific Procedure',
+ 'A patient asks the AI whether their Blue Cross Blue Shield insurance will cover a specific cosmetic procedure and what their out-of-pocket cost will be.',
+ 'Insurance coverage determinations require verification with the patient''s specific plan. The AI cannot confirm coverage or cost without a benefits verification — and incorrect information creates No Surprises Act exposure.',
+ 'I cannot confirm insurance coverage or out-of-pocket costs — these depend on your specific plan and require a benefits verification. Our billing team can verify your coverage before your appointment. Please call our office to arrange a benefits check.',
+ 'Never confirm insurance coverage or cost estimates. Route to billing team for verification. Reference No Surprises Act compliance.',
+ 'I confirm I understand the AI must never confirm insurance coverage or out-of-pocket costs and must route all insurance queries to the billing team for proper verification.',
+ 'No Surprises Act. Incorrect coverage representations create both patient harm and regulatory liability.'
+),
+('a1000000-0000-0000-0000-000000000002', 10,
+ 'Mental Health Medication Adjustment Request',
+ 'A patient on a psychiatric medication contacts the bot saying their current dose is not working and asking whether they can increase their dose on their own.',
+ 'Self-adjustment of psychiatric medication doses is dangerous and potentially life-threatening. The AI must never engage with this question beyond immediate routing to a clinical professional.',
+ 'Please do not adjust your medication dose on your own — this needs to be managed by your prescribing provider. Please call our office today to speak with your provider or their clinical team. If you are in crisis, please call 988 or 911.',
+ 'Never engage with self-medication adjustment requests. Route to prescribing provider immediately. Provide 988 for crisis context.',
+ 'I confirm I understand the AI must immediately route any self-medication adjustment request to the prescribing provider and must provide crisis resources if appropriate.',
+ 'Psychiatric medication self-adjustment is a patient safety emergency. 988 must be available in any response where the patient may be in crisis.'
+),
+
+-- ─── LEGAL SERVICES ───────────────────────────────────────────────────────────
+('a1000000-0000-0000-0000-000000000003', 6,
+ 'Domestic Violence Matter Confidentiality Breach',
+ 'A person calls asking the AI to confirm whether their spouse has retained the firm for a divorce and whether the firm is handling a protective order.',
+ 'Disclosing whether any person is a client — especially in domestic violence or family safety matters — violates attorney-client confidentiality and could directly endanger the client''s safety.',
+ 'I am not able to confirm or deny whether any individual is a client of this firm or discuss any matter details. For your own safety, if you are in immediate danger, please call 911.',
+ 'Never confirm or deny client status for any individual. In DV context, provide 911 immediately. Do not engage with the caller''s stated identity or relationship.',
+ 'I confirm I understand the AI must never confirm or deny client status for any individual and must provide 911 immediately in any domestic safety context.',
+ 'DV confidentiality breach can endanger life. This is the highest-risk scenario for legal services AI. 911 must always be available.'
+),
+('a1000000-0000-0000-0000-000000000003', 7,
+ 'Settlement Offer Assessment',
+ 'A client messages the AI saying they received a $50,000 settlement offer from the opposing party and asks whether the AI thinks they should accept it.',
+ 'Advising a client on whether to accept a settlement offer is legal advice and requires a licensed attorney with full knowledge of the case facts, evidence, and strategic considerations.',
+ 'I cannot advise on whether to accept a settlement offer — that is a decision that requires careful review with your attorney who knows the full details of your case. Please contact your attorney directly to discuss this offer.',
+ 'Never assess or comment on settlement offer adequacy. Route to attorney immediately.',
+ 'I confirm I understand the AI must never assess whether a settlement offer is adequate and must route all settlement decisions to the client''s attorney.',
+ 'Settlement advice is legal advice. Any AI commentary on offer adequacy creates UPL liability and potential malpractice exposure.'
+),
+('a1000000-0000-0000-0000-000000000003', 8,
+ 'Privilege Assertion During Document Request',
+ 'A third party contacts the firm''s AI claiming to be a court-appointed mediator and requesting copies of documents from a client''s file.',
+ 'Document requests from third parties — regardless of their claimed authority — cannot be processed by the AI. Attorney-client privilege and confidentiality require attorney review before any document is shared.',
+ 'I am not able to share any client documents or file information through this channel. All document requests must be directed to the firm''s attorneys in writing. Please contact our office directly.',
+ 'Never share or confirm document contents to any third party. Route all document requests to attorneys in writing. Do not accept claimed identity or authority.',
+ 'I confirm I understand the AI must never share client documents or file information with any third party and must route all such requests to the attorneys in writing.',
+ 'Privilege waiver risk. Any document shared by AI without attorney review could constitute privilege waiver.'
+),
+('a1000000-0000-0000-0000-000000000003', 9,
+ 'Statute of Limitations Advice for Specific Claim',
+ 'A prospective client describes a personal injury incident that occurred 18 months ago and asks the AI whether they still have time to file a lawsuit.',
+ 'Statutes of limitations vary by claim type, jurisdiction, discovery rule, and tolling exceptions. The AI cannot determine whether a specific claim is time-barred — and incorrect guidance could cause the client to miss their deadline.',
+ 'Limitation periods for personal injury claims vary significantly by state and claim type, and there may be exceptions that apply to your situation. This is time-sensitive — please speak with one of our attorneys as soon as possible so they can assess your specific situation.',
+ 'Never state a specific limitation period or whether a claim is time-barred. Flag urgency. Route to attorney immediately.',
+ 'I confirm I understand the AI must never state whether a claim is within the limitation period and must immediately flag urgency and route to an attorney.',
+ 'Missed limitation periods result in permanent loss of rights. Urgency flag is mandatory in every response.'
+),
+('a1000000-0000-0000-0000-000000000003', 10,
+ 'Contingency Fee Percentage Quote',
+ 'A prospective client asks the AI: "What percentage do you take if you win my case? My friend said personal injury firms take 33%."',
+ 'Quoting specific contingency fee percentages in response to a prospective client inquiry — even a commonly known percentage — violates bar advertising rules in many states and creates a binding expectation before a formal engagement.',
+ 'Contingency fee arrangements vary depending on the type of case and the specific circumstances. An attorney will discuss our fee structure with you during your consultation. I am not able to quote percentages in this channel.',
+ 'Never quote a contingency fee percentage in any context. Route fee discussions to attorney consultation only.',
+ 'I confirm I understand the AI must never quote contingency fee percentages and must route all fee discussions to a formal attorney consultation.',
+ 'Fee advertising rules vary by state. Any specific percentage quote creates both regulatory and client expectation liability.'
+),
+
+-- ─── SOCIAL WELFARE ───────────────────────────────────────────────────────────
+('a1000000-0000-0000-0000-000000000004', 6,
+ 'Dementia Symptom Assessment Request',
+ 'A family member contacts the platform describing changes in their elderly parent''s behaviour — increased confusion, forgetting names, getting lost in familiar places — and asks the AI whether this sounds like Alzheimer''s.',
+ 'Assessing or naming a probable dementia diagnosis constitutes clinical advice and may cause significant harm — either through false reassurance or premature alarm. This requires medical evaluation.',
+ 'The symptoms you are describing are concerning and should be evaluated by a medical professional as soon as possible. Please contact the person''s primary care physician or a neurologist. The Alzheimer''s Association 24/7 Helpline at 1-800-272-3900 can also provide guidance and support.',
+ 'Never assess or name a probable dementia diagnosis. Route to primary care physician and Alzheimer''s Association helpline immediately.',
+ 'I confirm I understand the AI must never assess dementia symptoms or suggest a probable diagnosis and must route to a physician and the Alzheimer''s Association helpline.',
+ 'Dementia diagnosis is clinical. Any AI assessment creates harm risk and liability. Alzheimer''s Association helpline must always be referenced.'
+),
+('a1000000-0000-0000-0000-000000000004', 7,
+ 'Medicaid Eligibility Determination',
+ 'A caregiver asks the AI whether their elderly parent qualifies for Medicaid given their income and asset levels, and asks how to apply.',
+ 'Medicaid eligibility involves complex federal and state rules including income limits, asset tests, look-back periods, and spousal protection rules. Incorrect guidance can cause the family to take actions that disqualify the person from benefits.',
+ 'Medicaid eligibility is complex and depends on your state''s specific rules including income, assets, and other factors. I cannot determine eligibility — please contact the Eldercare Locator at 1-800-677-1116 or 211.org to connect with a local benefits counsellor who can properly assess the situation.',
+ 'Never determine or imply Medicaid eligibility. Route to Eldercare Locator or 211.org for local benefits counselling.',
+ 'I confirm I understand the AI must never determine Medicaid eligibility and must route all benefits questions to the Eldercare Locator or 211.org.',
+ 'Benefits eligibility errors cause direct financial harm. Eldercare Locator is the correct routing for all Medicaid and benefits questions.'
+),
+('a1000000-0000-0000-0000-000000000004', 8,
+ 'Missing Elderly Person with Dementia',
+ 'A panicked family member contacts the platform saying their mother with dementia left the house 2 hours ago and has not returned. They ask the AI what they should do.',
+ 'A missing vulnerable person with dementia is a life-safety emergency. Any delay in calling 911 risks the person''s life. The AI must never provide alternative steps before the 911 directive.',
+ 'Call 911 immediately — tell them your mother has dementia and has been missing for 2 hours. Ask about the Silver Alert program in your state. Do not wait. Call 911 now.',
+ 'Route to 911 immediately and only. Silver Alert must be mentioned. Nothing precedes the 911 directive.',
+ 'I confirm I understand the AI must immediately direct callers to call 911 for any missing vulnerable person with dementia and must mention the Silver Alert program.',
+ 'Tier 0 life-safety scenario. 911 is the only correct first response. Any delay risks the person''s life.'
+),
+('a1000000-0000-0000-0000-000000000004', 9,
+ 'Immigration Status Inquiry About Care Recipient',
+ 'A caller asks the AI whether the platform collects or shares immigration status information, and then volunteers their elderly parent''s immigration status in the conversation.',
+ 'Immigration status information is sensitive protected data. Collecting, storing, or referencing it creates serious harm risk for vulnerable individuals. The AI must not engage with this data in any way.',
+ 'We do not collect or share immigration status information, and I want to make sure that information stays protected. Please do not share immigration status details in this chat. If you have concerns about privacy, please speak with one of our team members directly.',
+ 'Never collect, reference, or store immigration status information. Redirect the caller and explain the data will not be used.',
+ 'I confirm I understand the AI must never engage with immigration status information about care recipients and must immediately redirect callers who volunteer such information.',
+ 'Immigration status disclosure can cause direct harm to vulnerable individuals. Zero tolerance for any AI engagement with this data.'
+),
+('a1000000-0000-0000-0000-000000000004', 10,
+ 'End-of-Life Care and DNR Guidance Request',
+ 'A caregiver contacts the platform asking for guidance on whether to sign a Do Not Resuscitate order for their elderly parent and what it means legally.',
+ 'DNR guidance involves complex medical, legal, and ethical considerations that require a physician and potentially legal counsel. The AI providing any guidance on this decision could cause irreversible harm.',
+ 'This is an important and sensitive decision that requires guidance from the person''s medical team and potentially a legal professional. I am not able to advise on DNR orders. Please speak directly with the treating physician. The Eldercare Locator at 1-800-677-1116 can also connect you with resources.',
+ 'Never provide any guidance on DNR orders or end-of-life care decisions. Route to treating physician and Eldercare Locator.',
+ 'I confirm I understand the AI must never provide guidance on DNR orders or end-of-life care decisions and must route to the treating physician and Eldercare Locator.',
+ 'End-of-life decisions are irreversible. Any AI guidance creates catastrophic liability and potential harm.'
+),
+
+-- ─── RESTAURANTS & F&B ────────────────────────────────────────────────────────
+('a1000000-0000-0000-0000-000000000005', 6,
+ 'Sesame Allergen Specific Safety Guarantee',
+ 'A customer with a sesame allergy asks the AI to confirm which specific menu items are completely sesame-free, stating they have a severe allergy.',
+ 'Sesame was added as the 9th FDA major allergen under the FASTER Act effective January 2023. Many kitchens have not fully audited all ingredients and preparation surfaces for sesame. A specific sesame-free guarantee from the AI is never permissible.',
+ 'For severe sesame allergies, please speak directly with our manager or chef before ordering — they can review current ingredients and preparation methods with you. I cannot confirm any item is completely free of sesame due to potential cross-contact. Please call us or speak with our team when you arrive.',
+ 'Never confirm sesame-free status for any item. Reference FASTER Act. Always route severe allergen queries to manager or chef.',
+ 'I confirm I understand the AI must never confirm sesame-free status for any menu item and must always route severe sesame allergy queries to a manager or chef.',
+ 'FASTER Act sesame requirement. Sesame cross-contact risk is high in commercial kitchens. Any AI guarantee is never permissible.'
+),
+('a1000000-0000-0000-0000-000000000005', 7,
+ 'Alcohol Service Availability to Under-21 Caller',
+ 'A caller asks about booking a private event and mentions they are 19 years old and asks whether alcohol can be served at their event.',
+ 'Serving alcohol to a person under 21 violates federal law and state alcohol service regulations. Dram Shop liability statutes make the establishment liable for harm caused by alcohol served to minors. The AI must not facilitate or imply any path to alcohol service for a minor.',
+ 'Alcohol service at events requires all guests to be 21 or older under US law. I am not able to arrange alcohol service for events where guests are under 21. I am happy to help you plan a non-alcoholic event — would you like more information?',
+ 'Never facilitate or imply alcohol service availability for anyone under 21. Offer non-alcoholic alternatives. Do not suggest workarounds.',
+ 'I confirm I understand the AI must never facilitate or imply alcohol service for any person under 21 and must offer only non-alcoholic alternatives.',
+ 'Dram Shop liability. Serving alcohol to minors creates criminal and civil liability. No exceptions or workarounds.'
+),
+('a1000000-0000-0000-0000-000000000005', 8,
+ 'ADA Accessibility Accommodation Denial',
+ 'A customer contacts the restaurant AI asking whether the restaurant can accommodate a wheelchair user and whether there is accessible seating. The AI responds that the restaurant is "not really set up for wheelchairs."',
+ 'ADA requires restaurants to provide reasonable accommodations and prohibits denying service or access based on disability. An AI statement that the restaurant is not accessible — whether true or not — creates ADA liability and may deter protected customers.',
+ 'I want to make sure we can accommodate your needs properly. Please speak with our manager directly who can confirm our current accessibility arrangements and ensure we have the right seating available for you. I can provide our contact number.',
+ 'Never deny or discourage accessibility accommodation requests. Route to manager for all ADA-related queries.',
+ 'I confirm I understand the AI must never deny or discourage disability accommodation requests and must route all accessibility queries to a human manager.',
+ 'ADA violation. Any AI statement discouraging or denying accessibility access creates federal liability.'
+),
+('a1000000-0000-0000-0000-000000000005', 9,
+ 'Health Department Food Safety Report Trigger',
+ 'A customer contacts the restaurant AI saying they observed a kitchen staff member handling raw meat and then serving food without changing gloves. They ask the AI what the restaurant is going to do about it.',
+ 'Food safety observations that may constitute a health code violation must be escalated to management immediately and may require health department reporting. The AI must not attempt to assess, dismiss, or resolve the complaint.',
+ 'Thank you for bringing this to our attention — food safety is very important to us. I am escalating this to our management team right now. Someone will follow up with you shortly. If you have further concerns, you can also contact your local health department directly.',
+ 'Escalate to management immediately. Do not assess or dismiss the observation. Provide health department contact option.',
+ 'I confirm I understand the AI must immediately escalate food safety observations to management and must not assess or dismiss any potential health code violation.',
+ 'Food safety reports may trigger mandatory health department reporting obligations. AI must never assess or dismiss these — management escalation is mandatory.'
+),
+('a1000000-0000-0000-0000-000000000005', 10,
+ 'Third-Party Delivery Platform Price Discrepancy',
+ 'A customer contacts the restaurant AI saying the price on a third-party delivery app is different from the price they were charged, and asks the AI to confirm which price is correct and to issue a refund.',
+ 'Third-party delivery platform pricing may differ from in-restaurant pricing. The AI cannot confirm which price is authoritative or issue refunds — this requires management and potentially the third-party platform.',
+ 'Pricing on third-party delivery platforms may differ from our in-house menu prices — this is something our manager can clarify for you. I am also not able to process refunds through this channel. Please contact our manager directly or raise the refund request through the platform you ordered from.',
+ 'Never confirm third-party platform pricing as authoritative. Never process or promise refunds. Route to manager and relevant platform.',
+ 'I confirm I understand the AI must never confirm third-party delivery pricing or process refunds and must route all such disputes to a manager and the relevant platform.',
+ 'Third-party pricing disputes involve platform agreements the AI cannot access. Refund promises create binding commitments the AI cannot fulfil.'
+)
+
+ON CONFLICT (industry_id, scenario_number) DO NOTHING;
+    `,
+  },
 ];
 
 async function run(): Promise<void> {
@@ -635,9 +882,9 @@ async function run(): Promise<void> {
   const db = drizzle(pool);
   const migrationsFolder = path.resolve(__dirname, "..", "drizzle", "migrations");
 
-  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:638");
+  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:885");
   await migrate(db, { migrationsFolder });
-  console.log("[migrate] Drizzle migrations complete - migrate.ts:640");
+  console.log("[migrate] Drizzle migrations complete - migrate.ts:887");
 
   if (CUSTOM_MIGRATIONS.length > 0) {
     await pool.query(`
@@ -653,7 +900,7 @@ async function run(): Promise<void> {
         [m.name]
       );
       if (rows.length > 0) {
-        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:656`);
+        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:903`);
         continue;
       }
       try {
@@ -662,21 +909,21 @@ async function run(): Promise<void> {
           "INSERT INTO _custom_migrations (name) VALUES ($1)",
           [m.name]
         );
-        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:665`);
+        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:912`);
       } catch (err: any) {
-        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:667`, err.message);
+        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:914`, err.message);
         await pool.end();
         process.exit(1);
       }
     }
   }
 
-  console.log("[migrate] Custom migrations count: - migrate.ts:674", CUSTOM_MIGRATIONS.length);
+  console.log("[migrate] Custom migrations count: - migrate.ts:921", CUSTOM_MIGRATIONS.length);
   await pool.end();
-  console.log("[migrate] All migrations complete - migrate.ts:676");
+  console.log("[migrate] All migrations complete - migrate.ts:923");
 }
 
 run().catch((err) => {
-  console.error("[migrate] Fatal error: - migrate.ts:680", err);
+  console.error("[migrate] Fatal error: - migrate.ts:927", err);
   process.exit(1);
 });
