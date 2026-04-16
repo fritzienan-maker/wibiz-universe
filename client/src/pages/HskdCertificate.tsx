@@ -15,7 +15,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type CertStatus = 'IN_PROGRESS' | 'PENDING_OPS_REVIEW' | 'CERTIFIED' | 'REJECTED';
+type CertStatus = 'IN_PROGRESS' | 'OPS_REVIEW' | 'CERTIFIED' | 'REJECTED';
 
 interface CertificationData {
   id: string;
@@ -49,7 +49,7 @@ const STEPS = [
 
 function getCurrentStep(cert: CertificationData): number {
   if (cert.status === 'CERTIFIED') return 7;
-  if (cert.status === 'PENDING_OPS_REVIEW') return 6;
+  if (cert.status === 'OPS_REVIEW') return 6;
   if (cert.affirmation_submitted) return 5;
   if (cert.prohibited_confirmed > 0) return 4;
   if (cert.scenarios_approved > 0) return 3;
@@ -89,7 +89,7 @@ export default function HskdCertificate() {
         if (!certification) throw new Error('No certification found.');
         const scenariosApproved   = (scenario_logs || []).filter((l: any) => l.decision === 'APPROVED').length;
         const prohibitedConfirmed = (prohibited_logs || []).length;
-        const affirmationSubmitted = ['PENDING_OPS_REVIEW', 'OPS_REVIEW', 'CERTIFIED', 'REJECTED'].includes(certification.status);
+        const affirmationSubmitted = ['OPS_REVIEW', 'CERTIFIED', 'REJECTED'].includes(certification.status);
         setCert({
           id:                           certification.id,
           status:                       certification.status,
@@ -225,8 +225,8 @@ export default function HskdCertificate() {
     );
   }
 
-  // ─── PENDING_OPS_REVIEW ──────────────────────────────────────────────────
-  if (cert.status === 'PENDING_OPS_REVIEW') {
+  // ─── OPS_REVIEW ──────────────────────────────────────────────────
+  if (cert.status === 'OPS_REVIEW') {
     return (
       <div style={s.page}>
         <div style={{ ...s.statusBanner, ...s.bannerAmber }}>

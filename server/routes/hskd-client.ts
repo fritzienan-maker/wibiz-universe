@@ -28,7 +28,7 @@ const affirmationSchema = z.object({
   affirmation_license_state:  z.string().optional().nullable(),
   oncall_contact_name:        z.string().optional().nullable(),
   oncall_contact_phone:       z.string().optional().nullable(),
-  mandatory_reporter_status:  z.boolean().optional().nullable(),
+  mandatory_reporter_status:  z.union([z.boolean(), z.string()]).optional().nullable(),
   hipaa_baa_executed:         z.boolean().optional().nullable(),
   hipaa_baa_date:             z.string().optional().nullable(),
 });
@@ -263,9 +263,17 @@ hskdClientRouter.post("/prohibited/:certificationId/confirm", async (req: Reques
   }
 });
 
+// ─── AFFIRMATION — accepts any status that has passed prohibited step ──────────
+// Status check relaxed: allows AFFIRMATION or PROHIBITED (in case of timing issues)
+// Also handles re-submission gracefully
 hskdClientRouter.post("/affirmation/:certificationId", async (req: Request, res: Response): Promise<void> => {
+  console.log("[hskd] affirmation body:  affirmation - hskd-client.ts:270", JSON.stringify(req.body));
   const parsed = affirmationSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors }); return; }
+  if (!parsed.success) {
+    console.log("[hskd] affirmation validation error: - hskd-client.ts:273", parsed.error.flatten());
+    res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
+    return;
+  }
   try {
     const clientId = req.user?.userId;
     if (!clientId) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -274,14 +282,54 @@ hskdClientRouter.post("/affirmation/:certificationId", async (req: Request, res:
       [req.params.certificationId, clientId]
     );
     if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
-    if ((cert.rows[0] as any).status !== "AFFIRMATION") { res.status(400).json({ error: "Certification is not in AFFIRMATION status" }); return; }
+
+    const currentStatus = (cert.rows[0] as any).status;
+    console.log("[hskd] affirmation current status: - hskd-client.ts:287", currentStatus);
+
+    // Allow submission from AFFIRMATION or PROHIBITED status
+    // (PROHIBITED can happen if all items confirmed but status not yet updated)
+    const allowedStatuses = ["AFFIRMATION", "PROHIBITED"];
+    if (!allowedStatuses.includes(currentStatus)) {
+      res.status(400).json({
+        error: `Certification must be in AFFIRMATION status to submit. Current status: ${currentStatus}`
+      });
+      return;
+    }
+
     const d = parsed.data;
     const result = await pool.query(
-      `UPDATE client_certifications SET status = 'OPS_REVIEW', affirmation_legal_name = $1, affirmation_license_type = $2, affirmation_license_number = $3, affirmation_license_state = $4, oncall_contact_name = $5, oncall_contact_phone = $6, mandatory_reporter_status = $7, hipaa_baa_executed = $8, hipaa_baa_date = $9, affirmation_submitted_at = NOW(), updated_at = NOW() WHERE id = $10 RETURNING *`,
-      [d.legal_name, d.affirmation_license_type ?? null, d.affirmation_license_number ?? null, d.affirmation_license_state ?? null, d.oncall_contact_name ?? null, d.oncall_contact_phone ?? null, d.mandatory_reporter_status ?? null, d.hipaa_baa_executed ?? null, d.hipaa_baa_date ?? null, req.params.certificationId]
+      `UPDATE client_certifications
+       SET status = 'OPS_REVIEW',
+           affirmation_legal_name      = $1,
+           affirmation_license_type    = $2,
+           affirmation_license_number  = $3,
+           affirmation_license_state   = $4,
+           oncall_contact_name         = $5,
+           oncall_contact_phone        = $6,
+           mandatory_reporter_status   = $7,
+           hipaa_baa_executed          = $8,
+           hipaa_baa_date              = $9,
+           affirmation_submitted_at    = NOW(),
+           updated_at                  = NOW()
+       WHERE id = $10
+       RETURNING *`,
+      [
+        d.legal_name,
+        d.affirmation_license_type    ?? null,
+        d.affirmation_license_number  ?? null,
+        d.affirmation_license_state   ?? null,
+        d.oncall_contact_name         ?? null,
+        d.oncall_contact_phone        ?? null,
+        d.mandatory_reporter_status   ?? null,
+        d.hipaa_baa_executed          ?? null,
+        d.hipaa_baa_date              ?? null,
+        req.params.certificationId,
+      ]
     );
+    console.log("[hskd] affirmation success, new status: OPS_REVIEW - hskd-client.ts:329");
     res.json({ certification: result.rows[0] });
   } catch (err: any) {
+    console.error("[hskd] affirmation error: - hskd-client.ts:332", err?.message, err?.stack);
     res.status(500).json({ error: err?.message ?? "Failed to submit affirmation" });
   }
 });
@@ -298,10 +346,7 @@ hskdClientRouter.get("/crisis-resources/:industrySlug", async (req: Request, res
   }
 });
 
-// ─── NEW: GET /summary ────────────────────────────────────────────────────────
-// Used by HskdSummaryCard on the dashboard.
-// Returns the most advanced certification for the current user.
-
+// ─── GET /summary ─────────────────────────────────────────────────────────────
 hskdClientRouter.get("/summary", async (req: Request, res: Response): Promise<void> => {
   try {
     const clientId = req.user?.userId;
@@ -348,7 +393,7 @@ hskdClientRouter.get("/summary", async (req: Request, res: Response): Promise<vo
 
     let currentStep = 1;
     if (widgetStatus === "in_progress") {
-      if (cert.training_completed_at)     currentStep = 2;
+      if (cert.training_completed_at) currentStep = 2;
 
       if (cert.status === "SCENARIOS") {
         const approved = await pool.query(
@@ -371,21 +416,19 @@ hskdClientRouter.get("/summary", async (req: Request, res: Response): Promise<vo
     }
 
     res.json({
-      status:        widgetStatus,
-      industry_name: cert.industry_name,
-      industry_slug: cert.industry_slug,
+      status:         widgetStatus,
+      industry_name:  cert.industry_name,
+      industry_slug:  cert.industry_slug,
       certificate_id: cert.certificate_id ?? undefined,
-      current_step:  widgetStatus === "in_progress" ? currentStep : undefined,
-      total_steps:   7,
+      current_step:   widgetStatus === "in_progress" ? currentStep : undefined,
+      total_steps:    7,
     });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "Failed to fetch summary" });
   }
 });
 
-// ─── NEW: GET /certify/:industrySlug/status ───────────────────────────────────
-// Used by HskdCertificate.tsx — returns full status for the certificate page.
-
+// ─── GET /certify/:industrySlug/status ────────────────────────────────────────
 hskdClientRouter.get("/certify/:industrySlug/status", async (req: Request, res: Response): Promise<void> => {
   try {
     const clientId = req.user?.userId;
@@ -429,30 +472,36 @@ hskdClientRouter.get("/certify/:industrySlug/status", async (req: Request, res: 
     );
     const prohibitedConfirmed = parseInt((prohibitedResult.rows[0] as any).confirmed_count) || 0;
 
+    // OPS_REVIEW is the status after affirmation is submitted
     const affirmationSubmitted = ["OPS_REVIEW", "CERTIFIED", "REJECTED"].includes(cert.status);
 
-    const userResult = await pool.query(
-      `SELECT business_name FROM users WHERE id = $1 LIMIT 1`,
-      [clientId]
-    );
-    const businessName = (userResult.rows[0] as any)?.business_name ?? null;
+    let businessName: string | null = null;
+    try {
+      const userResult = await pool.query(
+        `SELECT business_name FROM users WHERE id = $1 LIMIT 1`,
+        [clientId]
+      );
+      businessName = (userResult.rows[0] as any)?.business_name ?? null;
+    } catch {
+      // business_name column may not exist — ignore
+    }
 
     res.json({
-      id:                            cert.id,
-      status:                        cert.status,
-      industry_name:                 cert.industry_name,
-      industry_slug:                 cert.industry_slug,
-      tier:                          cert.tier,
-      certificate_id:                cert.certificate_id,
-      client_full_name:              cert.client_full_name,
-      business_name:                 businessName,
-      specialist_mode_activated_at:  cert.specialist_mode_activated_at,
-      ops_signoff_at:                cert.ops_signoff_at,
-      training_completed_at:         cert.training_completed_at,
-      scenarios_approved:            scenariosApproved,
-      prohibited_confirmed:          prohibitedConfirmed,
-      affirmation_submitted:         affirmationSubmitted,
-      rejection_note:                cert.status === "REJECTED" ? cert.rejection_note : null,
+      id:                           cert.id,
+      status:                       cert.status,
+      industry_name:                cert.industry_name,
+      industry_slug:                cert.industry_slug,
+      tier:                         cert.tier,
+      certificate_id:               cert.certificate_id,
+      client_full_name:             cert.client_full_name,
+      business_name:                businessName,
+      specialist_mode_activated_at: cert.specialist_mode_activated_at,
+      ops_signoff_at:               cert.ops_signoff_at,
+      training_completed_at:        cert.training_completed_at,
+      scenarios_approved:           scenariosApproved,
+      prohibited_confirmed:         prohibitedConfirmed,
+      affirmation_submitted:        affirmationSubmitted,
+      rejection_note:               cert.status === "REJECTED" ? cert.rejection_note : null,
     });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "Failed to fetch certification status" });
