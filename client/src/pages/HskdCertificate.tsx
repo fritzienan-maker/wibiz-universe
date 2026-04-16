@@ -49,6 +49,7 @@ const STEPS = [
 
 function getCurrentStep(cert: CertificationData): number {
   if (cert.status === 'CERTIFIED') return 7;
+  if (cert.status === 'PENDING_OPS_REVIEW') return 6;
   if (cert.affirmation_submitted) return 5;
   if (cert.prohibited_confirmed > 0) return 4;
   if (cert.scenarios_approved > 0) return 3;
@@ -59,7 +60,7 @@ function getCurrentStep(cert: CertificationData): number {
 function getNextStepUrl(cert: CertificationData): string {
   const slug = cert.industry_slug;
   if (!cert.training_completed_at) return `/hskd/certify/${slug}/training`;
-  if (cert.scenarios_approved < 5) return `/hskd/certify/${slug}/scenarios`;
+  if (cert.scenarios_approved < 10) return `/hskd/certify/${slug}/scenarios`;
   if (!cert.affirmation_submitted) return `/hskd/certify/${slug}/prohibited`;
   return `/hskd/certify/${slug}/affirmation`;
 }
@@ -88,7 +89,7 @@ export default function HskdCertificate() {
         if (!certification) throw new Error('No certification found.');
         const scenariosApproved   = (scenario_logs || []).filter((l: any) => l.decision === 'APPROVED').length;
         const prohibitedConfirmed = (prohibited_logs || []).length;
-        const affirmationSubmitted = ['OPS_REVIEW', 'CERTIFIED', 'REJECTED'].includes(certification.status);
+        const affirmationSubmitted = ['PENDING_OPS_REVIEW', 'OPS_REVIEW', 'CERTIFIED', 'REJECTED'].includes(certification.status);
         setCert({
           id:                           certification.id,
           status:                       certification.status,

@@ -176,8 +176,8 @@ function ExerciseProofForm({
       <div className="p-ex-row" style={{ opacity: 0.45 }}>
         <div className="p-ex-check ec-lock" />
         <div className="p-ex-label locked">
-          {exercise.dayNumber ? `Day ${exercise.dayNumber} — ` : ""}
-          {exercise.title.replace(/^Day \d+ — /, "")}
+          {exercise.dayNumber ? `Module ${exercise.dayNumber} — ` : ""}
+          {exercise.title.replace(/^Module \d+ — /, "").replace(/^Day \d+ — /, "")}
         </div>
         <div className="p-ex-day">Locked</div>
       </div>
@@ -194,8 +194,8 @@ function ExerciseProofForm({
       <div className="p-ex-row" style={{ cursor: "pointer" }} onClick={() => setOpen((o) => !o)}>
         <div className={`p-ex-check ${checkClass}`}>{checkIcon}</div>
         <div className="p-ex-label">
-          {exercise.dayNumber ? `Day ${exercise.dayNumber} — ` : ""}
-          {exercise.title.replace(/^Day \d+ — /, "")}
+          {exercise.dayNumber ? `Module ${exercise.dayNumber} — ` : ""}
+          {exercise.title.replace(/^Module \d+ — /, "").replace(/^Day \d+ — /, "")}
         </div>
         <div className="p-ex-day" style={{ color: rowColor }}>{rowLabel}</div>
       </div>
@@ -454,9 +454,9 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
         <h2>Welcome back, {user.firstName ?? displayName}.</h2>
         <p>
           {programmeComplete
-            ? "You have completed your 30-day programme. Congratulations!"
+            ? "You have completed your WiBiz Academy — 30-Module Activation Programme. Congratulations!"
             : nextExercise
-            ? `You are on Day ${nextExercise.dayNumber ?? "—"} of your 30-day programme. Keep going.`
+            ? `You are on Module ${nextExercise.dayNumber ?? "—"} of your WiBiz Academy — 30-Module Activation Programme. Keep going.`
             : stats.totalModules === 0
             ? "Your programme is being set up. Check back soon."
             : "Your programme is ready. Get started below."}
@@ -486,11 +486,11 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
         <div className="p-stat">
           <div className="p-stat-lbl">Next Step</div>
           <div className="p-stat-val sm">
-            {nextExercise ? `Day ${nextExercise.dayNumber ?? "—"}` : programmeComplete ? "Complete!" : "—"}
+            {nextExercise ? `Module ${nextExercise.dayNumber ?? "—"}` : programmeComplete ? "Complete!" : "—"}
           </div>
           <div className="p-stat-sub">
             {nextExercise
-              ? nextExercise.title.replace(/^Day \d+ — /, "").slice(0, 28)
+              ? nextExercise.title.replace(/^Module \d+ — /, "").replace(/^Day \d+ — /, "").slice(0, 28)
               : "—"}
           </div>
         </div>
@@ -504,7 +504,7 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
             <div className="p-ci" onClick={() => onTabChange("programme")} style={{ cursor: "pointer" }}>
               <div className="p-ci-icon ic-30">30</div>
               <div className="p-ci-info">
-                <div className="p-ci-name">30-Day Programme</div>
+                <div className="p-ci-name">WiBiz Academy — 30-Module Activation Programme</div>
                 <div className="p-ci-meta">
                   {stats.completedExercises} of {stats.totalExercises} exercises ·{" "}
                   {stats.totalModules} module gate sign-offs
@@ -569,7 +569,8 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
               <div className="p-resume-box">
                 <div>
                   <div className="p-rb-title">
-                    {nextExercise.dayNumber ? `Day ${nextExercise.dayNumber} — ` : ""}{nextExercise.title.replace(/^Day \d+ — /, "")}
+                    {nextExercise.dayNumber ? `Module ${nextExercise.dayNumber} — ` : ""}
+                    {nextExercise.title.replace(/^Module \d+ — /, "").replace(/^Day \d+ — /, "")}
                   </div>
                   <div className="p-rb-meta">
                     Submit your proof response in My Programme to mark this complete
@@ -653,7 +654,7 @@ function TabProgramme({
   return (
     <>
       <div className="p-greet">
-        <h2>30-Day Programme</h2>
+        <h2>WiBiz Academy — 30-Module Activation Programme</h2>
         <p>
           Work through your exercises in order. Submit a written proof (and optionally a screenshot) for each exercise.
           Our team reviews each submission — you'll see Approved, Pending Review, or Rejected with feedback.
@@ -684,7 +685,7 @@ function TabProgramme({
                   </div>
                   {mod.dayStart != null && mod.dayEnd != null && (
                     <span style={{ fontSize: 11, color: "var(--ts)" }}>
-                      Days {mod.dayStart}–{mod.dayEnd}
+                      Modules {mod.dayStart}–{mod.dayEnd}
                     </span>
                   )}
                 </div>
@@ -763,7 +764,7 @@ function TabProgramme({
                     Gate {i + 1} — {mod.title.split("—")[1]?.trim() ?? mod.title} sign-off
                   </div>
                   <div style={{ fontSize: 11, color: "var(--ts)" }}>
-                    {mod.dayEnd ? `After Day ${mod.dayEnd}` : "Module completion"} · Quiz required
+                    {mod.dayEnd ? `After Module ${mod.dayEnd}` : "Module completion"} · Quiz required
                   </div>
                 </div>
                 <span className={`p-badge ${mod.gateSubmitted ? "b-done" : mod.status === "available" ? "b-pend" : "b-lock"}`}>
