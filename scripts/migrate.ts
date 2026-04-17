@@ -869,6 +869,70 @@ VALUES
 ON CONFLICT (industry_id, scenario_number) DO NOTHING;
     `,
   },
+
+  {
+    name: "0032_seed_quiz_questions",
+    sql: `
+DO $$
+DECLARE
+  mod_ids UUID[];
+  mod_id UUID;
+  q_count INT;
+  i INT;
+BEGIN
+  -- Get module IDs ordered
+  SELECT ARRAY(SELECT id FROM modules ORDER BY order_index ASC LIMIT 4) INTO mod_ids;
+
+  -- Module 1 questions
+  mod_id := mod_ids[1];
+  SELECT COUNT(*) INTO q_count FROM quiz_questions WHERE module_id = mod_id;
+  IF q_count = 0 THEN
+    INSERT INTO quiz_questions (module_id, question, options, correct_answer_index, order_index, is_active) VALUES
+    (mod_id, 'What is the primary purpose of your WiBiz AI system?', '["Replace your staff entirely","Handle customer inquiries and automate responses 24/7","Manage your accounting","Send promotional emails only"]', 1, 0, true),
+    (mod_id, 'What does Signal Launch mean in WiBiz Universe?', '["Sending your first email campaign","Your AI system going live and handling real customer conversations","Launching a new product","Creating your first ad"]', 1, 1, true),
+    (mod_id, 'Which CRM platform does WiBiz Universe use as its backbone?', '["Salesforce","HubSpot","GoHighLevel (GHL)","Zoho"]', 2, 2, true),
+    (mod_id, 'What should you do if your AI gives an incorrect response to a customer?', '["Ignore it","Delete the conversation","Review and update the relevant workflow or knowledge base entry","Turn off the AI system"]', 2, 3, true),
+    (mod_id, 'After completing Module 1, what should your dashboard show?', '["A blank screen","Only admin settings","Your connected channels and active workflows","Payment history only"]', 2, 4, true);
+  END IF;
+
+  -- Module 2 questions
+  mod_id := mod_ids[2];
+  SELECT COUNT(*) INTO q_count FROM quiz_questions WHERE module_id = mod_id;
+  IF q_count = 0 THEN
+    INSERT INTO quiz_questions (module_id, question, options, correct_answer_index, order_index, is_active) VALUES
+    (mod_id, 'What is the main goal of Phase 2: Conversion Optimisation?', '["Get the AI system running","Turn conversations into bookings and revenue","Add new staff members","Set up email marketing"]', 1, 0, true),
+    (mod_id, 'What milestone marks completion of Module 2?', '["Sending 100 messages","Day 14 Check-In with 5 criteria checked","Completing 30 exercises","Getting 10 new customers"]', 1, 1, true),
+    (mod_id, 'What is the key performance indicator for conversion in your AI system?', '["Number of messages sent","Response time only","Conversations that result in bookings or sales","Number of FAQs answered"]', 2, 2, true),
+    (mod_id, 'Which feature helps move customers from inquiry to booking?', '["Email blasts","Automated follow-up sequences and booking flow","Social media posts","Phone calls only"]', 1, 3, true),
+    (mod_id, 'What should you review at the Day 14 Check-In?', '["Only revenue figures","System uptime only","Conversion rates, response quality, and workflow performance","Staff timesheets"]', 2, 4, true);
+  END IF;
+
+  -- Module 3 questions
+  mod_id := mod_ids[3];
+  SELECT COUNT(*) INTO q_count FROM quiz_questions WHERE module_id = mod_id;
+  IF q_count = 0 THEN
+    INSERT INTO quiz_questions (module_id, question, options, correct_answer_index, order_index, is_active) VALUES
+    (mod_id, 'What is the focus of Phase 3: Scale + Governance?', '["Getting the system online","Adding channels, routing, and operational consistency","Cancelling underperforming workflows","Reducing costs only"]', 1, 0, true),
+    (mod_id, 'What does routing mean in the context of your AI system?', '["Sending emails to a list","Directing customer queries to the right response or team member","Creating new workflows from scratch","Posting on social media"]', 1, 1, true),
+    (mod_id, 'By Module 3, how many channels should your system ideally cover?', '["One channel only","Only WhatsApp","Multiple channels relevant to your business vertical","All social media platforms"]', 2, 2, true),
+    (mod_id, 'What is reviewed at the Day 21 Check-In?', '["Staff attendance","Performance metrics and potential upgrade readiness","Email open rates only","Website traffic"]', 1, 3, true),
+    (mod_id, 'What does governance mean in your AI system operations?', '["Government regulations only","Consistent rules, escalation paths, and quality controls","Tracking social media followers","Managing ad spend"]', 1, 4, true);
+  END IF;
+
+  -- Module 4 questions
+  mod_id := mod_ids[4];
+  SELECT COUNT(*) INTO q_count FROM quiz_questions WHERE module_id = mod_id;
+  IF q_count = 0 THEN
+    INSERT INTO quiz_questions (module_id, question, options, correct_answer_index, order_index, is_active) VALUES
+    (mod_id, 'What is the goal of Phase 4: Retention + Expansion?', '["Restarting the AI system","Building habits, measuring ROI, and preparing for renewal","Reducing the number of channels","Cutting operational costs only"]', 1, 0, true),
+    (mod_id, 'What happens at the Day 30 Graduation milestone?', '["You restart Module 1","You receive the ClearPath Tier 1 Certification","You get a refund","The system resets"]', 1, 1, true),
+    (mod_id, 'What does ROI measurement in Module 4 focus on?', '["Social media likes","Revenue generated vs cost of the AI system","Number of staff hours saved","Both B and C"]', 3, 2, true),
+    (mod_id, 'What is the ClearPath Certification awarded for?', '["Completing one exercise","Successfully completing all HSKD phases with Ops sign-off","Paying the subscription fee","Referring another client"]', 1, 3, true),
+    (mod_id, 'What does Specialist Mode mean after HSKD certification?', '["A staff member takes over the AI","The AI system is unlocked with advanced vertical-specific settings","The account gets a discount","The system is paused for review"]', 1, 4, true);
+  END IF;
+END $$;
+    `,
+  },
 ];
 
 async function run(): Promise<void> {
@@ -882,9 +946,9 @@ async function run(): Promise<void> {
   const db = drizzle(pool);
   const migrationsFolder = path.resolve(__dirname, "..", "drizzle", "migrations");
 
-  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:885");
+  console.log("[migrate] Running drizzlekit migrations… - migrate.ts:949");
   await migrate(db, { migrationsFolder });
-  console.log("[migrate] Drizzle migrations complete - migrate.ts:887");
+  console.log("[migrate] Drizzle migrations complete - migrate.ts:951");
 
   if (CUSTOM_MIGRATIONS.length > 0) {
     await pool.query(`
@@ -900,7 +964,7 @@ async function run(): Promise<void> {
         [m.name]
       );
       if (rows.length > 0) {
-        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:903`);
+        console.log(`[migrate] ✓ Already applied: ${m.name} - migrate.ts:967`);
         continue;
       }
       try {
@@ -909,21 +973,21 @@ async function run(): Promise<void> {
           "INSERT INTO _custom_migrations (name) VALUES ($1)",
           [m.name]
         );
-        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:912`);
+        console.log(`[migrate] ✓ Applied: ${m.name} - migrate.ts:976`);
       } catch (err: any) {
-        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:914`, err.message);
+        console.error(`[migrate] ✗ Failed: ${m.name} - migrate.ts:978`, err.message);
         await pool.end();
         process.exit(1);
       }
     }
   }
 
-  console.log("[migrate] Custom migrations count: - migrate.ts:921", CUSTOM_MIGRATIONS.length);
+  console.log("[migrate] Custom migrations count: - migrate.ts:985", CUSTOM_MIGRATIONS.length);
   await pool.end();
-  console.log("[migrate] All migrations complete - migrate.ts:923");
+  console.log("[migrate] All migrations complete - migrate.ts:987");
 }
 
 run().catch((err) => {
-  console.error("[migrate] Fatal error: - migrate.ts:927", err);
+  console.error("[migrate] Fatal error: - migrate.ts:991", err);
   process.exit(1);
 });

@@ -1414,3 +1414,160 @@ function ProvisionOverride() {
     </div>
   );
 }
+
+function TabHskdContent() {
+  const [section, setSection] = React.useState<"scenarios" | "prohibited" | "training">("scenarios")
+  const [industries, setIndustries] = React.useState<any[]>([])
+  const [selectedIndustry, setSelectedIndustry] = React.useState<string>("")
+  const [items, setItems] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(false)
+  const [editItem, setEditItem] = React.useState<any | null>(null)
+  const [saving, setSaving] = React.useState(false)
+  const [saveMsg, setSaveMsg] = React.useState("")
+
+  React.useEffect(() => {
+    apiFetch<{ industries: any[] }>("/client/hskd/industries")
+      .then(d => { setIndustries(d.industries); if (d.industries[0]) setSelectedIndustry(d.industries[0].id) })
+      .catch(() => {})
+  }, [])
+
+  React.useEffect(() => {
+    if (!selectedIndustry) return
+    setLoading(true); setItems([]); setEditItem(null)
+    const ep = section === "scenarios"
+      ? `/admin/hskd/scenarios?industry_id=${selectedIndustry}`
+      : section === "prohibited"
+      ? `/admin/hskd/prohibited?industry_id=${selectedIndustry}`
+      : `/admin/hskd/training?industry_id=${selectedIndustry}`
+    apiFetch<any>(ep)
+      .then(d => setItems(d.scenarios ?? d.items ?? d.modules ?? []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false))
+  }, [selectedIndustry, section])
+
+  const saveItem = async () => {
+    if (!editItem) return
+    setSaving(true); setSaveMsg("")
+    try {
+      const ep = section === "scenarios"
+        ? `/admin/hskd/scenarios/${editItem.id}`
+        : section === "prohibited"
+        ? `/admin/hskd/prohibited/${editItem.id}`
+        : `/admin/hskd/training/${editItem.id}`
+      await apiFetch(ep, { method: "PATCH", body: JSON.stringify(editItem) })
+      setSaveMsg("Saved ✓")
+      setItems(prev => prev.map(i => i.id === editItem.id ? editItem : i))
+    } catch (err) {
+      setSaveMsg("Save failed")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputCls = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+  const taCls = inputCls + " resize-none"
+
+  return (
+    <div className="space-y-4">
+      {/* Section selector */}
+      <div className="flex gap-1 p-1 bg-muted/30 rounded-lg w-fit">
+        {(["scenarios","prohibited","training"] as const).map(s => (
+          <button key={s} onClick={() => setSection(s)}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${section === s ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            {s === "scenarios" ? "Scenarios" : s === "prohibited" ? "Prohibited Items" : "Training Modules"}
+          </button>
+        ))}
+      </div>
+
+      {/* Industry selector */}
+      <div className="flex items-center gap-3">
+        <label className="text-sm font-medium text-muted-foreground">Industry:</label>
+        <select value={selectedIndustry} onChange={e => setSelectedIndustry(e.target.value)}
+          className="border border-border rounded-lg px-3 py-1.5 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+          {industries.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+        </select>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${industries.find(i=>i.id===selectedIndustry)?.tier==="TIER_0" ? "bg-red-900/40 text-red-400" : "bg-amber-900/40 text-amber-400"}`}>
+          {industries.find(i=>i.id===selectedIndustry)?.tier}
+        </span>
+      </div>
+
+      {loading ? <p className="text-sm text-muted-foreground py-4">Loading…</p> : (
+        <div className="grid grid-cols-5 gap-4" style={{minHeight: 400}}>
+          {/* List */}
+          <div className="col-span-2 space-y-1">
+            {items.map((item, idx) => (
+              <div key={item.id}
+                onClick={() => setEditItem({...item})}
+                className={`px-3 py-2 rounded-lg cursor-pointer border text-sm ${editItem?.id === item.id ? "border-primary bg-primary/10 text-primary" : "border-border text-foreground hover:bg-muted/40"}`}>
+                <div className="font-medium truncate">
+                  {item.scenario_number || item.item_number || item.module_number
+                    ? `${item.scenario_number ?? item.item_number ?? item.module_number}. ` : ""}
+                  {item.title ?? item.category ?? `Item ${idx + 1}`}
+                </div>
+                {item.is_active === false && <span className="text-xs text-muted-foreground">Hidden</span>}
+              </div>
+            ))}
+            {items.length === 0 && <p className="text-xs text-muted-foreground py-2">No items found.</p>}
+          </div>
+
+          {/* Editor */}
+          <div className="col-span-3">
+            {!editItem ? (
+              <div className="flex items-center justify-center h-full text-sm text-muted-foreground border border-border rounded-xl">
+                Select an item to edit
+              </div>
+            ) : (
+              <div className="space-y-3 border border-border rounded-xl p-4">
+                {section === "scenarios" && (<>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Title</label>
+                    <input type="text" value={editItem.title ?? ""} onChange={e => setEditItem({...editItem, title: e.target.value})} className={inputCls} /></div>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">The Scenario</label>
+                    <textarea rows={4} value={editItem.scenario_text ?? ""} onChange={e => setEditItem({...editItem, scenario_text: e.target.value})} className={taCls} /></div>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">The Danger</label>
+                    <textarea rows={3} value={editItem.danger_text ?? ""} onChange={e => setEditItem({...editItem, danger_text: e.target.value})} className={taCls} /></div>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Prescribed Bot Response</label>
+                    <textarea rows={3} value={editItem.prescribed_bot_response ?? ""} onChange={e => setEditItem({...editItem, prescribed_bot_response: e.target.value})} className={taCls} /></div>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Mandatory Bot Action</label>
+                    <textarea rows={2} value={editItem.mandatory_bot_action ?? ""} onChange={e => setEditItem({...editItem, mandatory_bot_action: e.target.value})} className={taCls} /></div>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Certification Prompt (shown to client)</label>
+                    <textarea rows={2} value={editItem.certification_prompt ?? ""} onChange={e => setEditItem({...editItem, certification_prompt: e.target.value})} className={taCls} /></div>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Ops Note (internal only)</label>
+                    <textarea rows={2} value={editItem.ops_note ?? ""} onChange={e => setEditItem({...editItem, ops_note: e.target.value})} className={taCls} /></div>
+                </>)}
+
+                {section === "prohibited" && (<>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Category</label>
+                    <input type="text" value={editItem.category ?? ""} onChange={e => setEditItem({...editItem, category: e.target.value})} className={inputCls} /></div>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Restriction Text</label>
+                    <textarea rows={5} value={editItem.restriction_text ?? ""} onChange={e => setEditItem({...editItem, restriction_text: e.target.value})} className={taCls} /></div>
+                </>)}
+
+                {section === "training" && (<>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Title</label>
+                    <input type="text" value={editItem.title ?? ""} onChange={e => setEditItem({...editItem, title: e.target.value})} className={inputCls} /></div>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Content</label>
+                    <textarea rows={8} value={editItem.content ?? ""} onChange={e => setEditItem({...editItem, content: e.target.value})} className={taCls} /></div>
+                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Video URL (optional)</label>
+                    <input type="url" value={editItem.video_url ?? ""} onChange={e => setEditItem({...editItem, video_url: e.target.value})} className={inputCls} placeholder="https://www.loom.com/share/..." /></div>
+                </>)}
+
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" checked={editItem.is_active ?? true} onChange={e => setEditItem({...editItem, is_active: e.target.checked})} className="w-4 h-4 accent-primary" />
+                  <label className="text-sm text-foreground">Active (visible to clients)</label>
+                </div>
+
+                <div className="flex items-center gap-3 justify-end pt-1">
+                  {saveMsg && <span className={`text-xs ${saveMsg.includes("✓") ? "text-green-400" : "text-destructive"}`}>{saveMsg}</span>}
+                  <button onClick={saveItem} disabled={saving}
+                    className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                    {saving ? "Saving…" : "Save Changes →"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

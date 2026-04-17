@@ -46,6 +46,11 @@ export const users = pgTable("users", {
   planTier:      planTierEnum("plan_tier"),
   vertical:      varchar("vertical", { length: 100 }),
   hskdRequired:     boolean("hskd_required").default(false),
+  // ── Certification gate flags ──────────────────────────────────────────────
+  academyCompleted: boolean("academy_completed").default(false),
+  botCertPassed:    boolean("bot_cert_passed").default(false),
+  hskdPassed:       boolean("hskd_passed").default(false),
+  clearpathIssued:  boolean("clearpath_issued").default(false),
   isActive:         boolean("is_active").default(true),
   activatedAt:      timestamp("activated_at"),
   lastLoginAt:      timestamp("last_login_at"),
@@ -214,6 +219,61 @@ export const tutorialVideos = pgTable("tutorial_videos", {
   isActive:   boolean("is_active").notNull().default(true),
   createdAt:  timestamp("created_at").defaultNow(),
   updatedAt:  timestamp("updated_at").defaultNow(),
+});
+
+// ─── Certificates ─────────────────────────────────────────────────────────────
+export const certificates = pgTable("certificates", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  userId:     uuid("user_id").notNull(),
+  type:       varchar("type", { length: 50 }).notNull(), // academy | bot_cert | hskd_cert | clearpath
+  certNumber: varchar("cert_number", { length: 50 }).unique(),
+  issuedAt:   timestamp("issued_at").defaultNow(),
+  createdAt:  timestamp("created_at").defaultNow(),
+});
+
+// ─── Bot Certification Questions ──────────────────────────────────────────────
+export const botCertQuestions = pgTable("bot_cert_questions", {
+  id:                 uuid("id").primaryKey().defaultRandom(),
+  question:           text("question").notNull(),
+  options:            jsonb("options").$type<string[]>().notNull(),
+  correctAnswerIndex: integer("correct_answer_index").notNull(),
+  orderIndex:         integer("order_index").notNull().default(0),
+  isActive:           boolean("is_active").notNull().default(true),
+  createdAt:          timestamp("created_at").defaultNow(),
+  updatedAt:          timestamp("updated_at").defaultNow(),
+});
+
+export const botCertResponses = pgTable("bot_cert_responses", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  userId:         uuid("user_id").notNull(),
+  answers:        jsonb("answers").$type<number[]>().notNull(),
+  score:          integer("score").notNull(),
+  totalQuestions: integer("total_questions").notNull(),
+  passed:         boolean("passed").notNull().default(false),
+  passedAt:       timestamp("passed_at"),
+  createdAt:      timestamp("created_at").defaultNow(),
+});
+
+// ─── HSKD Certification Questions ────────────────────────────────────────────
+export const hskdCertQuestions = pgTable("hskd_cert_questions", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  scenario:   text("scenario").notNull(),
+  orderIndex: integer("order_index").notNull().default(0),
+  isActive:   boolean("is_active").notNull().default(true),
+  createdAt:  timestamp("created_at").defaultNow(),
+  updatedAt:  timestamp("updated_at").defaultNow(),
+});
+
+export const hskdCertResponses = pgTable("hskd_cert_responses", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  userId:        uuid("user_id").notNull(),
+  answers:       jsonb("answers").$type<string[]>().notNull(),
+  hasRejection:  boolean("has_rejection").notNull().default(false),
+  flaggedAt:     timestamp("flagged_at"),
+  adminApproved: boolean("admin_approved").default(false),
+  approvedBy:    uuid("approved_by"),
+  approvedAt:    timestamp("approved_at"),
+  createdAt:     timestamp("created_at").defaultNow(),
 });
 
 // ─── Inferred types ───────────────────────────────────────────────────────────

@@ -509,3 +509,102 @@ hskdRouter.get("/kb-reviews-due", async (_req: Request, res: Response): Promise<
     res.status(500).json({ error: err?.message ?? "Failed to fetch KB reviews" });
   }
 });
+
+// ─── GET /api/admin/hskd/scenarios?industry_id=xxx ────────────────────────────
+hskdRouter.get("/scenarios", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { industry_id } = req.query;
+    if (!industry_id) { res.status(400).json({ error: "industry_id required" }); return; }
+    const result = await pool.query(
+      `SELECT * FROM hskd_scenarios WHERE industry_id = $1 ORDER BY scenario_number ASC`,
+      [industry_id]
+    );
+    res.json({ scenarios: result.rows });
+  } catch (err: any) { res.status(500).json({ error: err?.message }); }
+});
+
+// ─── PATCH /api/admin/hskd/scenarios/:id ─────────────────────────────────────
+hskdRouter.patch("/scenarios/:id", async (req: Request, res: Response): Promise<void> => {
+  const { title, scenario_text, danger_text, prescribed_bot_response, mandatory_bot_action, certification_prompt, ops_note, is_active } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE hskd_scenarios SET
+        title = COALESCE($1, title),
+        scenario_text = COALESCE($2, scenario_text),
+        danger_text = COALESCE($3, danger_text),
+        prescribed_bot_response = COALESCE($4, prescribed_bot_response),
+        mandatory_bot_action = COALESCE($5, mandatory_bot_action),
+        certification_prompt = COALESCE($6, certification_prompt),
+        ops_note = COALESCE($7, ops_note),
+        is_active = COALESCE($8, is_active),
+        updated_at = NOW()
+       WHERE id = $9 RETURNING *`,
+      [title, scenario_text, danger_text, prescribed_bot_response, mandatory_bot_action, certification_prompt, ops_note, is_active, req.params.id]
+    );
+    if (!result.rows.length) { res.status(404).json({ error: "Not found" }); return; }
+    res.json({ scenario: result.rows[0] });
+  } catch (err: any) { res.status(500).json({ error: err?.message }); }
+});
+
+// ─── GET /api/admin/hskd/prohibited?industry_id=xxx ──────────────────────────
+hskdRouter.get("/prohibited", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { industry_id } = req.query;
+    if (!industry_id) { res.status(400).json({ error: "industry_id required" }); return; }
+    const result = await pool.query(
+      `SELECT * FROM hskd_prohibited_items WHERE industry_id = $1 ORDER BY item_number ASC`,
+      [industry_id]
+    );
+    res.json({ items: result.rows });
+  } catch (err: any) { res.status(500).json({ error: err?.message }); }
+});
+
+// ─── PATCH /api/admin/hskd/prohibited/:id ────────────────────────────────────
+hskdRouter.patch("/prohibited/:id", async (req: Request, res: Response): Promise<void> => {
+  const { category, restriction_text, is_active } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE hskd_prohibited_items SET
+        category = COALESCE($1, category),
+        restriction_text = COALESCE($2, restriction_text),
+        is_active = COALESCE($3, is_active),
+        updated_at = NOW()
+       WHERE id = $4 RETURNING *`,
+      [category, restriction_text, is_active, req.params.id]
+    );
+    if (!result.rows.length) { res.status(404).json({ error: "Not found" }); return; }
+    res.json({ item: result.rows[0] });
+  } catch (err: any) { res.status(500).json({ error: err?.message }); }
+});
+
+// ─── GET /api/admin/hskd/training?industry_id=xxx ────────────────────────────
+hskdRouter.get("/training", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { industry_id } = req.query;
+    if (!industry_id) { res.status(400).json({ error: "industry_id required" }); return; }
+    const result = await pool.query(
+      `SELECT * FROM hskd_training_modules WHERE industry_id = $1 ORDER BY module_number ASC`,
+      [industry_id]
+    );
+    res.json({ modules: result.rows });
+  } catch (err: any) { res.status(500).json({ error: err?.message }); }
+});
+
+// ─── PATCH /api/admin/hskd/training/:id ──────────────────────────────────────
+hskdRouter.patch("/training/:id", async (req: Request, res: Response): Promise<void> => {
+  const { title, content, video_url, is_active } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE hskd_training_modules SET
+        title = COALESCE($1, title),
+        content = COALESCE($2, content),
+        video_url = COALESCE($3, video_url),
+        is_active = COALESCE($4, is_active),
+        updated_at = NOW()
+       WHERE id = $5 RETURNING *`,
+      [title, content, video_url, is_active, req.params.id]
+    );
+    if (!result.rows.length) { res.status(404).json({ error: "Not found" }); return; }
+    res.json({ module: result.rows[0] });
+  } catch (err: any) { res.status(500).json({ error: err?.message }); }
+});

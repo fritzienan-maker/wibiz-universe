@@ -9,6 +9,7 @@ import {
   submitExerciseProof,
   markModuleComplete,
   hasPassedQuiz,
+  checkAndSetAcademyComplete,
 } from "../db";
 
 export const progressRouter = Router();
@@ -86,6 +87,10 @@ progressRouter.post(
     }
 
     await markModuleComplete(userId, moduleId);
+
+    // Check if all modules are now complete → set academy_completed + issue cert
+    await checkAndSetAcademyComplete(userId);
+
     res.json({ message: "module_complete", moduleId });
   }
 );

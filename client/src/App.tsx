@@ -14,6 +14,7 @@ import HskdAffirmation     from "./pages/HskdAffirmation";
 import HskdCertificate     from "./pages/HskdCertificate";
 import BotCertification    from "./pages/BotCertification";
 import { apiFetch, ApiError } from "./lib/api";
+import CookieBanner from "../components/CookieBanner";
 
 // ─── Auth state hook ──────────────────────────────────────────────────────────
 type Status = "loading" | "authed" | "unauthed";
@@ -97,6 +98,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      <CookieBanner />
     </BrowserRouter>
   );
 }

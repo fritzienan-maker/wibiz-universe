@@ -263,14 +263,12 @@ hskdClientRouter.post("/prohibited/:certificationId/confirm", async (req: Reques
   }
 });
 
-// ─── AFFIRMATION — accepts any status that has passed prohibited step ──────────
-// Status check relaxed: allows AFFIRMATION or PROHIBITED (in case of timing issues)
-// Also handles re-submission gracefully
+// ─── AFFIRMATION ──────────────────────────────────────────────────────────────
 hskdClientRouter.post("/affirmation/:certificationId", async (req: Request, res: Response): Promise<void> => {
-  console.log("[hskd] affirmation body:  affirmation - hskd-client.ts:270", JSON.stringify(req.body));
+  console.log("[hskd] affirmation body:  affirmation - hskd-client.ts:268", JSON.stringify(req.body));
   const parsed = affirmationSchema.safeParse(req.body);
   if (!parsed.success) {
-    console.log("[hskd] affirmation validation error: - hskd-client.ts:273", parsed.error.flatten());
+    console.log("[hskd] affirmation validation error: - hskd-client.ts:271", parsed.error.flatten());
     res.status(400).json({ error: "Invalid input", details: parsed.error.flatten().fieldErrors });
     return;
   }
@@ -284,10 +282,8 @@ hskdClientRouter.post("/affirmation/:certificationId", async (req: Request, res:
     if (!cert.rows.length) { res.status(404).json({ error: "Certification not found" }); return; }
 
     const currentStatus = (cert.rows[0] as any).status;
-    console.log("[hskd] affirmation current status: - hskd-client.ts:287", currentStatus);
+    console.log("[hskd] affirmation current status: - hskd-client.ts:285", currentStatus);
 
-    // Allow submission from AFFIRMATION or PROHIBITED status
-    // (PROHIBITED can happen if all items confirmed but status not yet updated)
     const allowedStatuses = ["AFFIRMATION", "PROHIBITED"];
     if (!allowedStatuses.includes(currentStatus)) {
       res.status(400).json({
@@ -326,10 +322,10 @@ hskdClientRouter.post("/affirmation/:certificationId", async (req: Request, res:
         req.params.certificationId,
       ]
     );
-    console.log("[hskd] affirmation success, new status: OPS_REVIEW - hskd-client.ts:329");
+    console.log("[hskd] affirmation success, new status: OPS_REVIEW - hskd-client.ts:325");
     res.json({ certification: result.rows[0] });
   } catch (err: any) {
-    console.error("[hskd] affirmation error: - hskd-client.ts:332", err?.message, err?.stack);
+    console.error("[hskd] affirmation error: - hskd-client.ts:328", err?.message, err?.stack);
     res.status(500).json({ error: err?.message ?? "Failed to submit affirmation" });
   }
 });
@@ -472,7 +468,6 @@ hskdClientRouter.get("/certify/:industrySlug/status", async (req: Request, res: 
     );
     const prohibitedConfirmed = parseInt((prohibitedResult.rows[0] as any).confirmed_count) || 0;
 
-    // OPS_REVIEW is the status after affirmation is submitted
     const affirmationSubmitted = ["OPS_REVIEW", "CERTIFIED", "REJECTED"].includes(cert.status);
 
     let businessName: string | null = null;

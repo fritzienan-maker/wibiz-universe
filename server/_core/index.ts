@@ -16,6 +16,7 @@ import { quizRouter }        from "../routes/quiz";
 import { teamRouter, inviteRouter } from "../routes/team";
 import { supportRouter }     from "../routes/support";
 import { resourcesPublicRouter, staffRouter } from "../routes/resources";
+import { certificationRouter } from "../routes/certification";
 import { setupVite, serveStatic } from "./vite";
 
 validateEnv();
@@ -56,6 +57,7 @@ app.use("/api/team",           teamRouter);
 app.use("/api/support",        supportRouter);
 app.use("/api/resources",      resourcesPublicRouter);
 app.use("/api/staff",          staffRouter);
+app.use("/api/certification",  certificationRouter);
 
 // ─── Frontend (Vite dev middleware or static build) ───────────────────────────
 async function startServer(): Promise<void> {
@@ -66,12 +68,12 @@ async function startServer(): Promise<void> {
   }
 
   server.listen(ENV.port, () => {
-    console.log(`[server] WiBiz Academy listening on http://localhost:${ENV.port} - index.ts:69`);
-    console.log(`[server] Mode: ${ENV.isProduction ? "production" : "development"} - index.ts:70`);
+    console.log(`[server] WiBiz Academy listening on http://localhost:${ENV.port} - index.ts:71`);
+    console.log(`[server] Mode: ${ENV.isProduction ? "production" : "development"} - index.ts:72`);
   });
 }
 
 startServer().catch((err) => {
-  console.error("[server] Fatal startup error: - index.ts:75", err);
+  console.error("[server] Fatal startup error: - index.ts:77", err);
   process.exit(1);
 });

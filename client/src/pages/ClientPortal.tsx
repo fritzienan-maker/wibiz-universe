@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch, ApiError } from "../lib/api";
 import { useTheme } from "../lib/theme";
+import Footer from "../../components/Footer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Exercise {
@@ -39,15 +40,20 @@ interface Module {
 
 interface DashboardData {
   user: {
-    id:           string;
-    firstName:    string | null;
-    lastName:     string | null;
-    email:        string;
-    role:         string;
-    planTier:     string | null;
-    vertical:     string | null;
-    hskdRequired: boolean | null;
-    avatarUrl:    string | null;
+    id:               string;
+    firstName:        string | null;
+    lastName:         string | null;
+    email:            string;
+    role:             string;
+    planTier:         string | null;
+    vertical:         string | null;
+    hskdRequired:     boolean | null;
+    avatarUrl:        string | null;
+    // ── Certification gate flags ──
+    academyCompleted: boolean;
+    botCertPassed:    boolean;
+    hskdPassed:       boolean;
+    clearpathIssued:  boolean;
   };
   modules: Module[];
   stats: {
@@ -56,6 +62,13 @@ interface DashboardData {
     completedModules:   number;
     totalModules:       number;
     progressPct:        number;
+  };
+  certifications: {
+    academyComplete: boolean;
+    academyCert: CertSlot & { issued: boolean };
+    botCert:     CertSlot;
+    hskdCert:    CertSlot | null;
+    clearpath:   CertSlot & { issued: boolean };
   };
 }
 
@@ -66,13 +79,20 @@ interface QuizQuestion {
   orderIndex: number;
 }
 
+interface CertSlot {
+  passed:     boolean;
+  issuedAt:   string | null;
+  certNumber: string | null;
+  certId:     string | null;
+}
+
 interface QuizState {
   moduleId:    string;
   questions:   QuizQuestion[];
   lastAttempt: { score: number; totalQuestions: number; passed: boolean; passedAt: string | null } | null;
 }
 
-type Tab = "dashboard" | "programme" | "team" | "resources" | "support" | "account" | "hskd";
+type Tab = "dashboard" | "programme" | "certifications" | "team" | "resources" | "support" | "account" | "hskd";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function initials(first: string | null, last: string | null, email: string) {
@@ -438,9 +458,299 @@ function QuizPanel({
   );
 }
 
+// ─── Download helper ──────────────────────────────────────────────────────────
+function downloadCert(certId: string, label: string) {
+  const a = document.createElement("a");
+  a.href = `/api/certification/download/${certId}`;
+  a.download = label;
+  a.click();
+}
+
+// ─── CertificationsCard (used in Dashboard + Resources sidebar) ───────────────
+function CertificationsCard({
+  certifications,
+  hskdRequired,
+}: {
+  certifications: DashboardData["certifications"];
+  hskdRequired:   boolean;
+}) {
+  const { botCert, hskdCert, clearpath } = certifications;
+  return (
+    <div className="p-card">
+      <div className="p-card-title">Your Certifications</div>
+
+      {/* Phase 1: Academy */}
+      <div className="p-cert-item">
+        <div className="p-cert-icon cl" style={{ background: certifications.academyComplete ? "var(--g-t)" : undefined }}>A</div>
+        <div className="p-cert-info">
+          <div className="p-cert-name">WiBiz Academy - 30-Module Activation Programme</div>
+          <div className="p-cert-sub">Complete all 30 module gate sign-offs</div>
+        </div>
+        <span className={`p-badge ${certifications.academyComplete ? "b-done" : "b-lock"}`}>
+          {certifications.academyComplete ? "Complete" : "In Progress"}
+        </span>
+      </div>
+
+      {/* Phase 2: Bot Certification */}
+      <div className="p-cert-item">
+        <div className="p-cert-icon cl" style={{ background: botCert.passed ? "var(--g-t)" : undefined }}>B</div>
+        <div className="p-cert-info">
+          <div className="p-cert-name">Bot Certification</div>
+          <div className="p-cert-sub">
+            {botCert.passed
+              ? `Passed · ${botCert.certNumber ?? ""}`
+              : certifications.academyComplete
+              ? "10 questions · 8/10 to pass"
+              : "Unlocks after Academy complete"}
+          </div>
+        </div>
+        {botCert.passed && botCert.certId ? (
+          <button
+            className="p-btn p-btn-blue"
+            style={{ fontSize: 11, padding: "4px 10px" }}
+            onClick={() => downloadCert(botCert.certId!, `Bot-Certification-${botCert.certNumber}.pdf`)}
+          >
+            Download
+          </button>
+        ) : (
+          <span className={`p-badge ${certifications.academyComplete ? "b-pend" : "b-lock"}`}>
+            {certifications.academyComplete ? "Available" : "Locked"}
+          </span>
+        )}
+      </div>
+
+      {/* Phase 3: HSKD (only when required) */}
+      {hskdRequired && hskdCert && (
+        <div className="p-cert-item">
+          <div className="p-cert-icon cl" style={{ background: hskdCert.passed ? "var(--g-t)" : undefined }}>H</div>
+          <div className="p-cert-info">
+            <div className="p-cert-name">HSKD Certification</div>
+            <div className="p-cert-sub">
+              {hskdCert.passed
+                ? `Passed · ${hskdCert.certNumber ?? ""}`
+                : botCert.passed
+                ? "10 scenarios · APPROVE/REJECT · Admin approval required"
+                : "Unlocks after Bot Certification passed"}
+            </div>
+          </div>
+          {hskdCert.passed && hskdCert.certId ? (
+            <button
+              className="p-btn p-btn-blue"
+              style={{ fontSize: 11, padding: "4px 10px" }}
+              onClick={() => downloadCert(hskdCert.certId!, `HSKD-Certification-${hskdCert.certNumber}.pdf`)}
+            >
+              Download
+            </button>
+          ) : (
+            <span className={`p-badge ${botCert.passed ? "b-pend" : "b-lock"}`}>
+              {botCert.passed ? "Available" : "Locked"}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Final: ClearPath */}
+      <div className="p-cert-item">
+        <div className="p-cert-icon cl" style={{ background: clearpath.issued ? "var(--g-t)" : undefined }}>C</div>
+        <div className="p-cert-info">
+          <div className="p-cert-name">ClearPath Certificate</div>
+          <div className="p-cert-sub">
+            {clearpath.issued
+              ? `Issued · ${clearpath.certNumber ?? ""}`
+              : "Issued when all required gates are complete"}
+          </div>
+        </div>
+        {clearpath.issued && clearpath.certId ? (
+          <button
+            className="p-btn p-btn-blue"
+            style={{ fontSize: 11, padding: "4px 10px" }}
+            onClick={() => downloadCert(clearpath.certId!, `ClearPath-Certificate-${clearpath.certNumber}.pdf`)}
+          >
+            Download
+          </button>
+        ) : (
+          <span className="p-badge b-lock">Locked</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── TabCertifications ────────────────────────────────────────────────────────
+interface BotCertState {
+  questions:   QuizQuestion[];
+  passed:      boolean;
+  lastAttempt: { score: number; totalQuestions: number; passed: boolean; passedAt: string | null } | null;
+}
+
+function TabCertifications({ data, onReload }: { data: DashboardData; onReload: () => void }) {
+  const { user, certifications } = data;
+  const [botState,   setBotState]   = useState<BotCertState | null>(null);
+  const [botLoading, setBotLoading] = useState(false);
+  const [botAnswers, setBotAnswers] = useState<Record<string, number>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [result,     setResult]     = useState<{ score: number; totalQuestions: number; passed: boolean; message: string } | null>(null);
+  const [err,        setErr]        = useState("");
+
+  // Load bot cert questions when academy is complete and bot cert not yet passed
+  useEffect(() => {
+    if (!certifications.academyComplete || user.botCertPassed) return;
+    setBotLoading(true);
+    apiFetch<BotCertState>("/certification/bot")
+      .then(setBotState)
+      .catch(() => setErr("Could not load Bot Certification. Please refresh."))
+      .finally(() => setBotLoading(false));
+  }, [certifications.academyComplete, user.botCertPassed]);
+
+  const submitBotCert = async () => {
+    if (!botState) return;
+    const answers = botState.questions.map((q) => botAnswers[q.id] ?? -1);
+    if (answers.some((a) => a === -1)) { setErr("Please answer all questions before submitting."); return; }
+    setSubmitting(true); setErr("");
+    try {
+      const res = await apiFetch<{ score: number; totalQuestions: number; passed: boolean; message: string }>(
+        "/certification/bot", { method: "POST", body: JSON.stringify({ answers }) }
+      );
+      setResult(res);
+      if (res.passed) onReload();
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "Submission failed. Try again."); }
+    finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="p-greet" style={{ maxWidth: 720 }}>
+      <h2>Your Certifications</h2>
+      <p>Complete each stage in order. Your certificates are available to download once issued.</p>
+
+      {/* Stage 1: Academy */}
+      <div className="p-card" style={{ marginTop: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Stage 1 — Academy Completion Certificate</div>
+            <div style={{ fontSize: 12, color: "var(--ts)", marginTop: 2 }}>WiBiz Academy - 30-Module Activation Programme</div>
+          </div>
+          <span className={`p-badge ${certifications.academyComplete ? "b-done" : "b-lock"}`}>
+            {certifications.academyComplete ? "Complete" : "In Progress"}
+          </span>
+        </div>
+        {certifications.academyComplete
+          ? certifications.academyCert.certId
+            ? <button className="p-btn p-btn-blue" onClick={() => downloadCert(certifications.academyCert.certId!, `Academy-Completion-${certifications.academyCert.certNumber}.pdf`)}>
+                Download Certificate →
+              </button>
+            : <p style={{ fontSize: 12, color: "var(--ts)" }}>Certificate generating — refresh in a moment.</p>
+          : <p style={{ fontSize: 12, color: "var(--ts)" }}>Complete all 30 module gate sign-offs to receive this certificate.</p>
+        }
+      </div>
+
+      {/* Stage 2: Bot Certification */}
+      <div className="p-card" style={{ marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Stage 2 — Bot Certification</div>
+            <div style={{ fontSize: 12, color: "var(--ts)", marginTop: 2 }}>10 questions · Minimum 8/10 to pass</div>
+          </div>
+          <span className={`p-badge ${user.botCertPassed ? "b-done" : certifications.academyComplete ? "b-prog" : "b-lock"}`}>
+            {user.botCertPassed ? "Passed" : certifications.academyComplete ? "Available" : "Locked"}
+          </span>
+        </div>
+
+        {user.botCertPassed ? (
+          certifications.botCert.certId
+            ? <button className="p-btn p-btn-blue" onClick={() => downloadCert(certifications.botCert.certId!, `Bot-Certification-${certifications.botCert.certNumber}.pdf`)}>
+                Download Certificate →
+              </button>
+            : <p style={{ fontSize: 12, color: "var(--ts)" }}>Certificate generating — refresh in a moment.</p>
+        ) : !certifications.academyComplete ? (
+          <p style={{ fontSize: 12, color: "var(--ts)" }}>Unlocks after Academy completion.</p>
+        ) : botLoading ? (
+          <p style={{ fontSize: 12, color: "var(--ts)" }}>Loading questions…</p>
+        ) : result?.passed ? (
+          <div className="p-sign-banner" style={{ marginTop: 8 }}>
+            <div className="p-sb-icon">✓</div>
+            <div><div className="p-sb-text">Bot Certification passed!</div><div className="p-sb-sub">Score: {result.score}/{result.totalQuestions} · Certificate issued</div></div>
+            <span className="p-badge b-done">Passed</span>
+          </div>
+        ) : botState ? (
+          <>
+            {result && !result.passed && (
+              <div style={{ marginBottom: 12, padding: "8px 12px", background: "var(--card)", borderLeft: "3px solid var(--r-t, #c0392b)", borderRadius: "0 6px 6px 0", fontSize: 12 }}>
+                Score: {result.score}/{result.totalQuestions} — {result.message}
+              </div>
+            )}
+            {botState.lastAttempt && !result && (
+              <div style={{ marginBottom: 12, fontSize: 12, color: "var(--ts)" }}>
+                Last attempt: {botState.lastAttempt.score}/{botState.lastAttempt.totalQuestions} — try again below.
+              </div>
+            )}
+            <div style={{ marginBottom: 12 }}>
+              {botState.questions.map((q, qi) => (
+                <div key={q.id} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{qi + 1}. {q.question}</div>
+                  {q.options.map((opt, oi) => (
+                    <label key={oi} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
+                      <input type="radio" name={q.id} checked={botAnswers[q.id] === oi}
+                        onChange={() => setBotAnswers((a) => ({ ...a, [q.id]: oi }))} />
+                      {opt}
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+            {err && <div style={{ fontSize: 12, color: "var(--r-t, #c0392b)", marginBottom: 8 }}>{err}</div>}
+            <button className="p-btn p-btn-amber" disabled={submitting} onClick={submitBotCert}>
+              {submitting ? "Submitting…" : "Submit Bot Certification →"}
+            </button>
+          </>
+        ) : null}
+      </div>
+
+      {/* Stage 3: HSKD (if required) */}
+      {user.hskdRequired && (
+        <div className="p-card" style={{ marginTop: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>Stage 3 — HSKD Certification</div>
+              <div style={{ fontSize: 12, color: "var(--ts)", marginTop: 2 }}>10 scenarios · APPROVE/REJECT · Admin approval required</div>
+            </div>
+            <span className={`p-badge ${user.hskdPassed ? "b-done" : user.botCertPassed ? "b-pend" : "b-lock"}`}>
+              {user.hskdPassed ? "Passed" : user.botCertPassed ? "Available" : "Locked"}
+            </span>
+          </div>
+          {user.hskdPassed
+            ? certifications.hskdCert?.certId
+              ? <button className="p-btn p-btn-blue" onClick={() => downloadCert(certifications.hskdCert!.certId!, `HSKD-Certification-${certifications.hskdCert!.certNumber}.pdf`)}>Download Certificate →</button>
+              : <p style={{ fontSize: 12, color: "var(--ts)" }}>Certificate generating — refresh shortly.</p>
+            : user.botCertPassed
+            ? <p style={{ fontSize: 12, color: "var(--ts)" }}>Contact your WiBiz representative to begin the HSKD Certification process inside WiBiz Universe.</p>
+            : <p style={{ fontSize: 12, color: "var(--ts)" }}>Unlocks after Bot Certification is passed.</p>
+          }
+        </div>
+      )}
+
+      {/* Final: ClearPath */}
+      <div className="p-card" style={{ marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Final — ClearPath Certificate</div>
+            <div style={{ fontSize: 12, color: "var(--ts)", marginTop: 2 }}>Issued automatically once all required stages are complete</div>
+          </div>
+          <span className={`p-badge ${certifications.clearpath.issued ? "b-done" : "b-lock"}`}>
+            {certifications.clearpath.issued ? "Issued" : "Locked"}
+          </span>
+        </div>
+        {certifications.clearpath.issued && certifications.clearpath.certId
+          ? <button className="p-btn p-btn-blue" onClick={() => downloadCert(certifications.clearpath.certId!, `ClearPath-Certificate-${certifications.clearpath.certNumber}.pdf`)}>Download ClearPath Certificate →</button>
+          : <p style={{ fontSize: 12, color: "var(--ts)" }}>Issued when all required certification stages are complete.</p>
+        }
+      </div>
+    </div>
+  );
+}
+
 // ─── Dashboard tab ────────────────────────────────────────────────────────────
 function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange: (t: Tab) => void }) {
-  const { user, modules, stats } = data;
+  const { user, modules, stats, certifications } = data;
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
 
   const activeModule = modules.find((m) => m.status === "available");
@@ -448,13 +758,28 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
 
   const programmeComplete = stats.totalModules > 0 && stats.completedModules === stats.totalModules;
 
+  // Smart next step — guides user across all phases
+  const nextStep = (() => {
+    if (!programmeComplete)                              return { label: `Module ${nextExercise?.dayNumber ?? "—"}`, sub: nextExercise?.title.replace(/^Module \d+ — /, "").replace(/^Day \d+ — /, "").slice(0, 28) ?? "—", tab: "programme" as Tab };
+    if (!user.botCertPassed)                             return { label: "Bot Certification", sub: "10 questions · 8/10 to pass", tab: "certifications" as Tab };
+    if (user.hskdRequired && !user.hskdPassed)           return { label: "HSKD Certification", sub: "Scenarios · Approval required", tab: "certifications" as Tab };
+    if (!user.clearpathIssued)                           return { label: "ClearPath Ready", sub: "All gates passed — cert pending", tab: "certifications" as Tab };
+    return { label: "All Complete!", sub: "Download your certificates", tab: "certifications" as Tab };
+  })();
+
   return (
     <>
       <div className="p-greet">
         <h2>Welcome back, {user.firstName ?? displayName}.</h2>
         <p>
-          {programmeComplete
-            ? "You have completed your WiBiz Universe — 30-Module Activation Programme. Congratulations!"
+          {user.clearpathIssued
+            ? "Congratulations — all certifications complete. Download your ClearPath Certificate below."
+            : programmeComplete && !user.botCertPassed
+            ? "Academy complete! Your next step is Bot Certification. Head to the Certifications tab to begin."
+            : programmeComplete && user.botCertPassed && user.hskdRequired && !user.hskdPassed
+            ? "Bot Certification passed. Complete your HSKD Certification to unlock your ClearPath Certificate."
+            : programmeComplete
+            ? "You have completed the WiBiz Academy - 30-Module Activation Programme. Congratulations!"
             : nextExercise
             ? `You are on Module ${nextExercise.dayNumber ?? "—"} of your WiBiz Universe — 30-Module Activation Programme. Keep going.`
             : stats.totalModules === 0
@@ -467,9 +792,7 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
         <div className="p-stat">
           <div className="p-stat-lbl">Programme</div>
           <div className="p-stat-val">{stats.progressPct}%</div>
-          <div className="p-stat-sub">
-            {stats.completedExercises} of {stats.totalExercises} exercises
-          </div>
+          <div className="p-stat-sub">{stats.completedExercises} of {stats.totalExercises} exercises</div>
         </div>
         <div className="p-stat">
           <div className="p-stat-lbl">Modules</div>
@@ -483,16 +806,10 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
           <div className="p-stat-val sm">{capitalize(user.planTier)}</div>
           <div className="p-stat-sub">{capitalize(user.vertical)}</div>
         </div>
-        <div className="p-stat">
+        <div className="p-stat" onClick={() => onTabChange(nextStep.tab)} style={{ cursor: "pointer" }}>
           <div className="p-stat-lbl">Next Step</div>
-          <div className="p-stat-val sm">
-            {nextExercise ? `Module ${nextExercise.dayNumber ?? "—"}` : programmeComplete ? "Complete!" : "—"}
-          </div>
-          <div className="p-stat-sub">
-            {nextExercise
-              ? nextExercise.title.replace(/^Module \d+ — /, "").replace(/^Day \d+ — /, "").slice(0, 28)
-              : "—"}
-          </div>
+          <div className="p-stat-val sm">{nextStep.label}</div>
+          <div className="p-stat-sub">{nextStep.sub}</div>
         </div>
       </div>
 
@@ -529,15 +846,15 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
               <span className="p-badge b-prog">Watch</span>
             </div>
 
-            <div className="p-ci">
+            <div className="p-ci" onClick={() => onTabChange("certifications")} style={{ cursor: "pointer" }}>
               <div className="p-ci-icon ic-test">✓</div>
               <div className="p-ci-info">
-                <div className="p-ci-name">System Test — 10 Questions</div>
-                <div className="p-ci-meta">
-                  {capitalize(user.vertical)} vertical · Min 8/10 to pass
-                </div>
+                <div className="p-ci-name">Bot Certification</div>
+                <div className="p-ci-meta">{capitalize(user.vertical)} vertical · Min 8/10 to pass</div>
               </div>
-              <span className="p-badge b-lock">Locked</span>
+              <span className={`p-badge ${user.botCertPassed ? "b-done" : programmeComplete ? "b-prog" : "b-lock"}`}>
+                {user.botCertPassed ? "Passed" : programmeComplete ? "Start" : "Locked"}
+              </span>
             </div>
 
             {user.hskdRequired && (
@@ -545,11 +862,11 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
                 <div className="p-ci-icon ic-hskd">H</div>
                 <div className="p-ci-info">
                   <div className="p-ci-name">HSKD ClearPath Certification</div>
-                  <div className="p-ci-meta">
-                    5 industries · Scenarios · Affirmation · Certificate
-                  </div>
+                  <div className="p-ci-meta">5 industries · Scenarios · Affirmation · Certificate</div>
                 </div>
-                <span className="p-badge b-lock">Start</span>
+                <span className={`p-badge ${user.hskdPassed ? "b-done" : user.botCertPassed ? "b-prog" : "b-lock"}`}>
+                  {user.hskdPassed ? "Passed" : user.botCertPassed ? "Start" : "Locked"}
+                </span>
               </div>
             )}
 
@@ -572,46 +889,16 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
                     {nextExercise.dayNumber ? `Module ${nextExercise.dayNumber} — ` : ""}
                     {nextExercise.title.replace(/^Module \d+ — /, "").replace(/^Day \d+ — /, "")}
                   </div>
-                  <div className="p-rb-meta">
-                    Submit your proof response in My Programme to mark this complete
-                  </div>
+                  <div className="p-rb-meta">Submit your proof response in My Programme to mark this complete</div>
                 </div>
-                <button className="p-btn p-btn-blue" onClick={() => onTabChange("programme")}>
-                  Resume →
-                </button>
+                <button className="p-btn p-btn-blue" onClick={() => onTabChange("programme")}>Resume →</button>
               </div>
             </div>
           )}
         </div>
 
         <div>
-          <div className="p-card">
-            <div className="p-card-title">Certifications &amp; Sign-Offs</div>
-            <div className="p-cert-item">
-              <div className="p-cert-icon cl">M</div>
-              <div className="p-cert-info">
-                <div className="p-cert-name">Client Success Manual</div>
-                <div className="p-cert-sub">{capitalize(user.planTier)} plan · DocuSeal</div>
-              </div>
-              <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
-            </div>
-            <div className="p-cert-item">
-              <div className="p-cert-icon cl">S</div>
-              <div className="p-cert-info">
-                <div className="p-cert-name">System Test</div>
-                <div className="p-cert-sub">10 questions · 8/10 to pass</div>
-              </div>
-              <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
-            </div>
-            <div className="p-cert-item" onClick={() => onTabChange("hskd")} style={{ cursor: "pointer" }}>
-              <div className="p-cert-icon cl">C</div>
-              <div className="p-cert-info">
-                <div className="p-cert-name">ClearPath Certification</div>
-                <div className="p-cert-sub">HSKD · 5 industries · Issued after ops sign-off</div>
-              </div>
-              <span style={{ fontSize: "11px", color: "var(--tm)" }}>Pending</span>
-            </div>
-          </div>
+          <CertificationsCard certifications={certifications} hskdRequired={!!user.hskdRequired} />
 
           <div className="p-card">
             <div className="p-card-title">Quick Links</div>
@@ -626,7 +913,6 @@ function TabDashboard({ data, onTabChange }: { data: DashboardData; onTabChange:
     </>
   );
 }
-
 // ─── Programme tab ────────────────────────────────────────────────────────────
 function TabProgramme({
   modules,
@@ -1370,13 +1656,14 @@ export default function ClientPortal() {
   const av = initials(user.firstName, user.lastName, user.email);
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "dashboard",  label: "Dashboard"              },
-    { id: "programme",  label: "My Programme"           },
-    { id: "team",       label: "My Team"                },
-    { id: "resources",  label: "Resources"              },
-    { id: "hskd",       label: "ClearPath Certification"},
-    { id: "support",    label: "Get Support"            },
-    { id: "account",    label: "My Account"             },
+    { id: "dashboard",      label: "Dashboard"               },
+    { id: "programme",      label: "My Programme"            },
+    { id: "certifications", label: "Certifications"          },
+    { id: "team",           label: "My Team"                 },
+    { id: "resources",      label: "Resources"               },
+    { id: "hskd",           label: "ClearPath Certification" },
+    { id: "support",        label: "Get Support"             },
+    { id: "account",        label: "My Account"              },
   ];
 
   const planLabel = user.planTier ? `${capitalize(user.planTier)} plan` : "";
@@ -1415,14 +1702,16 @@ export default function ClientPortal() {
       </div>
 
       <div className="p-view">
-        {tab === "dashboard"  && <TabDashboard data={data} onTabChange={setTab} />}
-        {tab === "programme"  && <TabProgramme modules={data.modules} stats={data.stats} onExerciseSubmit={submitExerciseProof} onModuleGate={submitModuleGate} onReload={load} submitting={submitting} />}
-        {tab === "team"       && <TabTeam      user={user} />}
-        {tab === "resources"  && <TabResources user={user} onTabChange={setTab} />}
-        {tab === "hskd"       && <TabHskd      user={user} />}
-        {tab === "support"    && <TabSupport   user={user} />}
-        {tab === "account"    && <TabAccount   user={user} onReload={load} />}
+        {tab === "dashboard"      && <TabDashboard data={data} onTabChange={setTab} />}
+        {tab === "programme"      && <TabProgramme modules={data.modules} stats={data.stats} onExerciseSubmit={submitExerciseProof} onModuleGate={submitModuleGate} onReload={load} submitting={submitting} />}
+        {tab === "certifications" && <TabCertifications data={data} onReload={load} />}
+        {tab === "team"           && <TabTeam      user={user} />}
+        {tab === "resources"      && <TabResources user={user} onTabChange={setTab} />}
+        {tab === "hskd"           && <TabHskd      user={user} />}
+        {tab === "support"        && <TabSupport   user={user} />}
+        {tab === "account"        && <TabAccount   user={user} onReload={load} />}
       </div>
+      <Footer />
     </div>
   );
 }

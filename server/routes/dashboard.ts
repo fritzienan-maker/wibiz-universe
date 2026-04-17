@@ -9,6 +9,8 @@ import {
   getAllExerciseSubmissions,
   getCompletedModuleIds,
   hasPassedQuiz,
+  getUserCertificates,
+  checkAndSetAcademyComplete,
 } from "../db";
 
 export const dashboardRouter = Router();
@@ -113,17 +115,49 @@ dashboardRouter.get(
     const completedExs   = modules.reduce((s, m) => s + m.completedExercises, 0);
     const completedMods  = modules.filter((m) => m.gateSubmitted).length;
 
+    // ── Check & set academy_completed if all gates done ──────────────────────
+    if (completedMods === allModules.length && allModules.length > 0) {
+      await checkAndSetAcademyComplete(uid);
+      // Re-fetch user to get updated flags
+      const freshUser = await getUserById(uid);
+      if (freshUser) Object.assign(user, freshUser);
+    }
+
+    // ── Build certifications summary ─────────────────────────────────────────
+    const certs = await getUserCertificates(uid);
+
+    const findCert = (type: string) => {
+      const c = certs.find((x) => x.type === type);
+      return c
+        ? { passed: true, issuedAt: c.issuedAt, certNumber: c.certNumber, certId: c.id }
+        : { passed: false, issuedAt: null, certNumber: null, certId: null };
+    };
+
+    const academyComplete = user.academyCompleted ?? false;
+    const certifications = {
+      academyComplete,
+      academyCert: { ...findCert("academy"), issued: academyComplete },
+      botCert:     findCert("bot_cert"),
+      hskdCert:    user.hskdRequired ? findCert("hskd_cert") : null,
+      clearpath:   { ...findCert("clearpath"), issued: user.clearpathIssued ?? false },
+    };
+
     res.json({
       user: {
-        id:           user.id,
-        firstName:    user.firstName,
-        lastName:     user.lastName,
-        email:        user.email,
-        role:         user.role,
-        planTier:     user.planTier,
-        vertical:     user.vertical,
-        hskdRequired: user.hskdRequired,
-        avatarUrl:    user.avatarUrl ?? null,
+        id:               user.id,
+        firstName:        user.firstName,
+        lastName:         user.lastName,
+        email:            user.email,
+        role:             user.role,
+        planTier:         user.planTier,
+        vertical:         user.vertical,
+        hskdRequired:     user.hskdRequired,
+        avatarUrl:        user.avatarUrl ?? null,
+        // ── Cert gate flags ──
+        academyCompleted: user.academyCompleted ?? false,
+        botCertPassed:    user.botCertPassed    ?? false,
+        hskdPassed:       user.hskdPassed       ?? false,
+        clearpathIssued:  user.clearpathIssued  ?? false,
       },
       modules,
       stats: {
@@ -133,6 +167,7 @@ dashboardRouter.get(
         totalModules:       modules.length,
         progressPct: totalExercises > 0 ? Math.round((completedExs / totalExercises) * 100) : 0,
       },
+      certifications,
     });
   }
 );

@@ -683,3 +683,300 @@ export async function listSyncEvents(limit = 100) {
     .orderBy(desc(schema.syncEvents.createdAt))
     .limit(limit);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CERTIFICATION SYSTEM (Phase 2 + Phase 3 + ClearPath)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Academy completion check ─────────────────────────────────────────────────
+// Called after every module gate sign-off. Marks academy_completed if all
+// module gates are submitted, then issues the Academy Completion Certificate.
+export async function checkAndSetAcademyComplete(userId: string): Promise<boolean> {
+  const allModules = await listModules(true);
+  if (allModules.length === 0) return false;
+  const completedIds = await getCompletedModuleIds(userId);
+  const allDone = allModules.every((m) => completedIds.has(m.id));
+  if (allDone) {
+    const [user] = await db
+      .select({ academyCompleted: schema.users.academyCompleted })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId));
+    if (!user?.academyCompleted) {
+      await db
+        .update(schema.users)
+        .set({ academyCompleted: true, updatedAt: new Date() })
+        .where(eq(schema.users.id, userId));
+      // Issue Academy Completion Certificate (once only)
+      const certNumber = await generateCertNumber();
+      await createCertificate(userId, "academy", certNumber);
+    }
+  }
+  return allDone;
+}
+
+// ─── Bot Certification: Questions ────────────────────────────────────────────
+
+export async function listBotCertQuestionsForClient() {
+  return db
+    .select({
+      id:         schema.botCertQuestions.id,
+      question:   schema.botCertQuestions.question,
+      options:    schema.botCertQuestions.options,
+      orderIndex: schema.botCertQuestions.orderIndex,
+    })
+    .from(schema.botCertQuestions)
+    .where(eq(schema.botCertQuestions.isActive, true))
+    .orderBy(asc(schema.botCertQuestions.orderIndex));
+}
+
+export async function listBotCertQuestionsWithAnswers() {
+  return db
+    .select()
+    .from(schema.botCertQuestions)
+    .where(eq(schema.botCertQuestions.isActive, true))
+    .orderBy(asc(schema.botCertQuestions.orderIndex));
+}
+
+export async function getLatestBotCertResponse(userId: string) {
+  const [row] = await db
+    .select()
+    .from(schema.botCertResponses)
+    .where(eq(schema.botCertResponses.userId, userId))
+    .orderBy(desc(schema.botCertResponses.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function saveBotCertResponse(
+  userId: string,
+  answers: number[],
+  score: number,
+  totalQuestions: number,
+) {
+  const passed = score >= 8; // hard threshold: 8 out of 10
+  const [row] = await db
+    .insert(schema.botCertResponses)
+    .values({ userId, answers, score, totalQuestions, passed, passedAt: passed ? new Date() : null })
+    .returning();
+  return row!;
+}
+
+export async function setBotCertPassed(userId: string) {
+  await db
+    .update(schema.users)
+    .set({ botCertPassed: true, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+}
+
+// ─── Bot Cert: Admin CRUD ─────────────────────────────────────────────────────
+
+export async function getBotCertQuestionById(id: string) {
+  const [row] = await db.select().from(schema.botCertQuestions).where(eq(schema.botCertQuestions.id, id));
+  return row ?? null;
+}
+
+export async function createBotCertQuestion(data: {
+  question: string; options: string[]; correctAnswerIndex: number; orderIndex: number;
+}) {
+  const [row] = await db.insert(schema.botCertQuestions).values({ ...data, isActive: true }).returning();
+  return row!;
+}
+
+export async function updateBotCertQuestion(id: string, data: {
+  question?: string; options?: string[]; correctAnswerIndex?: number; orderIndex?: number; isActive?: boolean;
+}) {
+  const [row] = await db
+    .update(schema.botCertQuestions)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.botCertQuestions.id, id))
+    .returning();
+  return row ?? null;
+}
+
+export async function deleteBotCertQuestion(id: string) {
+  await db.delete(schema.botCertQuestions).where(eq(schema.botCertQuestions.id, id));
+}
+
+// ─── HSKD Certification: Questions ───────────────────────────────────────────
+
+export async function listHskdCertQuestions() {
+  return db
+    .select()
+    .from(schema.hskdCertQuestions)
+    .where(eq(schema.hskdCertQuestions.isActive, true))
+    .orderBy(asc(schema.hskdCertQuestions.orderIndex));
+}
+
+export async function getLatestHskdCertResponse(userId: string) {
+  const [row] = await db
+    .select()
+    .from(schema.hskdCertResponses)
+    .where(eq(schema.hskdCertResponses.userId, userId))
+    .orderBy(desc(schema.hskdCertResponses.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function saveHskdCertResponse(
+  userId: string,
+  answers: ("approve" | "reject")[],
+) {
+  const hasRejection = answers.some((a) => a === "reject");
+  const [row] = await db
+    .insert(schema.hskdCertResponses)
+    .values({ userId, answers, hasRejection, flaggedAt: hasRejection ? new Date() : null })
+    .returning();
+  return row!;
+}
+
+export async function approveHskdResponse(responseId: string, adminId: string) {
+  const [row] = await db
+    .update(schema.hskdCertResponses)
+    .set({ adminApproved: true, approvedBy: adminId, approvedAt: new Date() })
+    .where(eq(schema.hskdCertResponses.id, responseId))
+    .returning();
+  return row ?? null;
+}
+
+export async function setHskdPassed(userId: string) {
+  await db
+    .update(schema.users)
+    .set({ hskdPassed: true, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function listPendingHskdResponses() {
+  return db
+    .select({
+      id:            schema.hskdCertResponses.id,
+      userId:        schema.hskdCertResponses.userId,
+      answers:       schema.hskdCertResponses.answers,
+      hasRejection:  schema.hskdCertResponses.hasRejection,
+      flaggedAt:     schema.hskdCertResponses.flaggedAt,
+      createdAt:     schema.hskdCertResponses.createdAt,
+      userEmail:     schema.users.email,
+      userFirstName: schema.users.firstName,
+      userLastName:  schema.users.lastName,
+    })
+    .from(schema.hskdCertResponses)
+    .innerJoin(schema.users, eq(schema.hskdCertResponses.userId, schema.users.id))
+    .where(eq(schema.hskdCertResponses.adminApproved, false))
+    .orderBy(desc(schema.hskdCertResponses.createdAt));
+}
+
+// ─── HSKD: Admin CRUD ─────────────────────────────────────────────────────────
+
+export async function getHskdCertQuestionById(id: string) {
+  const [row] = await db.select().from(schema.hskdCertQuestions).where(eq(schema.hskdCertQuestions.id, id));
+  return row ?? null;
+}
+
+export async function createHskdCertQuestion(data: { scenario: string; orderIndex: number; }) {
+  const [row] = await db.insert(schema.hskdCertQuestions).values({ ...data, isActive: true }).returning();
+  return row!;
+}
+
+export async function updateHskdCertQuestion(id: string, data: {
+  scenario?: string; orderIndex?: number; isActive?: boolean;
+}) {
+  const [row] = await db
+    .update(schema.hskdCertQuestions)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.hskdCertQuestions.id, id))
+    .returning();
+  return row ?? null;
+}
+
+export async function deleteHskdCertQuestion(id: string) {
+  await db.delete(schema.hskdCertQuestions).where(eq(schema.hskdCertQuestions.id, id));
+}
+
+// ─── Certificates ─────────────────────────────────────────────────────────────
+
+let certCounter = 0;
+export async function generateCertNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const rows = await db
+    .select({ certNumber: schema.certificates.certNumber })
+    .from(schema.certificates)
+    .orderBy(desc(schema.certificates.createdAt))
+    .limit(1);
+  const lastNum = rows[0]?.certNumber?.match(/(\d+)$/)?.[1];
+  certCounter = lastNum ? parseInt(lastNum, 10) : certCounter;
+  certCounter++;
+  return `WBA-${year}-${String(certCounter).padStart(5, "0")}`;
+}
+
+export async function createCertificate(
+  userId:     string,
+  type:       "academy" | "bot_cert" | "hskd_cert" | "clearpath",
+  certNumber: string,
+) {
+  const [row] = await db
+    .insert(schema.certificates)
+    .values({ userId, type, certNumber })
+    .returning();
+  return row!;
+}
+
+export async function getCertificateById(certId: string) {
+  const [row] = await db
+    .select()
+    .from(schema.certificates)
+    .where(eq(schema.certificates.id, certId));
+  return row ?? null;
+}
+
+export async function getUserCertificates(userId: string) {
+  return db
+    .select()
+    .from(schema.certificates)
+    .where(eq(schema.certificates.userId, userId))
+    .orderBy(asc(schema.certificates.issuedAt));
+}
+
+export async function setClearpathIssued(userId: string) {
+  await db
+    .update(schema.users)
+    .set({ clearpathIssued: true, updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+}
+
+// Issues a ClearPath certificate if all required gates have passed.
+export async function checkAndIssueClearpath(
+  userId: string,
+  user: {
+    hskdRequired:    boolean | null;
+    botCertPassed:   boolean | null;
+    hskdPassed:      boolean | null;
+    clearpathIssued: boolean | null;
+  },
+) {
+  if (user.clearpathIssued) return null;
+  const botOk  = user.botCertPassed === true;
+  const hskdOk = !user.hskdRequired || user.hskdPassed === true;
+  if (!botOk || !hskdOk) return null;
+
+  const certNumber = await generateCertNumber();
+  const cert = await createCertificate(userId, "clearpath", certNumber);
+  await setClearpathIssued(userId);
+  return cert;
+}
+
+export async function listAllCertificatesAdmin() {
+  return db
+    .select({
+      id:         schema.certificates.id,
+      type:       schema.certificates.type,
+      certNumber: schema.certificates.certNumber,
+      issuedAt:   schema.certificates.issuedAt,
+      userId:     schema.certificates.userId,
+      userEmail:  schema.users.email,
+      firstName:  schema.users.firstName,
+      lastName:   schema.users.lastName,
+      vertical:   schema.users.vertical,
+    })
+    .from(schema.certificates)
+    .innerJoin(schema.users, eq(schema.certificates.userId, schema.users.id))
+    .orderBy(desc(schema.certificates.issuedAt));
+}
