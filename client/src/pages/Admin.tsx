@@ -334,6 +334,10 @@ function TabHskdCertifications() {
 
   const doSignoff = async (certId: string) => {
     if (!signoffName.trim()) { setSignoffErr("Enter your name to sign off."); return; }
+    const items = checklistItems(certs.find((c) => c.id === certId)!);
+    const checked = checklist[certId] ?? [];
+    const unchecked = items.filter((_, i) => !checked[i]);
+    if (unchecked.length > 0) { setSignoffErr(`Please check all items: ${unchecked[0]}`); return; }
     setSigningOff(true);
     setSignoffErr("");
     try {
@@ -510,7 +514,7 @@ function TabHskdCertifications() {
                                 <label className="block text-xs font-medium text-muted-foreground mb-1">Your name (ops sign-off)</label>
                                 <input type="text" value={signoffName} onChange={(e) => setSignoffName(e.target.value)} placeholder="e.g. Aileen — WiBiz Ops" className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
                               </div>
-                              <button disabled={!allChecked(cert.id) || signingOff || !signoffName.trim()} onClick={() => doSignoff(cert.id)} className="px-5 py-2 text-sm font-semibold bg-green-700 text-white rounded-lg hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                              <button disabled={signingOff || !signoffName.trim()} onClick={() => doSignoff(cert.id)} className="px-5 py-2 text-sm font-semibold bg-green-700 text-white rounded-lg hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                                 {signingOff ? "Processing…" : "Complete Ops Sign-Off →"}
                               </button>
                             </div>
