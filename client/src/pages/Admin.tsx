@@ -301,7 +301,17 @@ function TabHskdCertifications() {
     try {
       const data = await apiFetch<HskdCertDetail>(`/admin/hskd/certifications/${cert.id}`);
       setDetail(data);
-      setChecklist((prev) => ({ ...prev, [cert.id]: prev[cert.id] ?? Array(8).fill(false) }));
+      const itemCount = (() => {
+        const base = 4;
+        const slug = cert.industry_slug;
+        let count = base;
+        if (slug === "clinics" || slug === "social-welfare") count++;
+        if (slug === "legal-services") count++;
+        if (slug === "social-welfare") count += 2;
+        count++; // "30-day KB review task"
+        return count;
+      })();
+      setChecklist((prev) => ({ ...prev, [cert.id]: prev[cert.id] ?? Array(itemCount).fill(false) }));
     } finally {
       setDetailLoading(false);
     }
