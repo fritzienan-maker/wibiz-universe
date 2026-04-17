@@ -147,7 +147,7 @@ interface HskdCountRow {
   count:  string;
 }
 
-type Tab = "users" | "sync" | "webhooks" | "modules" | "submissions" | "provision" | "resources" | "hskd";
+type Tab = "users" | "sync" | "webhooks" | "modules" | "submissions" | "provision" | "resources" | "hskd" | "certifications";
 
 interface ResourceRow {
   id:          string;
@@ -309,7 +309,9 @@ function TabHskdCertifications() {
 
   const toggleCheck = (certId: string, idx: number) => {
     setChecklist((prev) => {
-      const arr = [...(prev[certId] ?? Array(8).fill(false))];
+      const cert = certs.find((c) => c.id === certId);
+      const itemCount = cert ? checklistItems(cert).length : 8;
+      const arr = [...(prev[certId] ?? Array(itemCount).fill(false))];
       arr[idx] = !arr[idx];
       return { ...prev, [certId]: arr };
     });
@@ -1117,6 +1119,394 @@ function TabResources() {
   );
 }
 
+// ─── Certifications Tab ───────────────────────────────────────────────────────
+
+interface CertRow {
+  id:         string;
+  type:       string;
+  certNumber: string | null;
+  issuedAt:   string | null;
+  userId:     string;
+  userEmail:  string;
+  firstName:  string | null;
+  lastName:   string | null;
+  vertical:   string | null;
+}
+
+interface BotQ {
+  id:                 string;
+  question:           string;
+  options:            string[];
+  correctAnswerIndex: number;
+  orderIndex:         number;
+  isActive:           boolean;
+}
+
+interface HskdQ {
+  id:         string;
+  scenario:   string;
+  orderIndex: number;
+  isActive:   boolean;
+}
+
+type CertSection = "certs" | "bot-quiz" | "hskd-quiz";
+
+function TabCertifications() {
+  const [section,  setSection]  = useState<CertSection>("certs");
+  const [certs,    setCerts]    = useState<CertRow[]>([]);
+  const [botQs,    setBotQs]    = useState<BotQ[]>([]);
+  const [hskdQs,   setHskdQs]  = useState<HskdQ[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [err,      setErr]      = useState("");
+
+  const emptyBotForm  = () => ({ question: "", options: ["", "", "", ""], correctAnswerIndex: 0, orderIndex: 0, isActive: true });
+  const emptyHskdForm = () => ({ scenario: "", orderIndex: 0, isActive: true });
+
+  const [botModal,  setBotModal]  = useState(false);
+  const [botEdit,   setBotEdit]   = useState<BotQ | null>(null);
+  const [botForm,   setBotForm]   = useState(emptyBotForm());
+
+  const [hskdModal, setHskdModal] = useState(false);
+  const [hskdEdit,  setHskdEdit]  = useState<HskdQ | null>(null);
+  const [hskdForm,  setHskdForm]  = useState(emptyHskdForm());
+
+  const loadAll = async () => {
+    const [c, b, h] = await Promise.all([
+      apiFetch<{ certificates: CertRow[] }>("/admin/certificates"),
+      apiFetch<{ questions: BotQ[] }>("/admin/bot-cert-questions"),
+      apiFetch<{ questions: HskdQ[] }>("/admin/hskd-cert-questions"),
+    ]);
+    setCerts(c.certificates);
+    setBotQs(b.questions);
+    setHskdQs(h.questions);
+  };
+
+  useEffect(() => { loadAll().finally(() => setLoading(false)); }, []);
+
+  const typeLabel: Record<string, string> = {
+    academy:   "Academy",
+    bot_cert:  "Bot Cert",
+    hskd_cert: "HSKD Cert",
+    clearpath: "ClearPath",
+  };
+
+  // ── Bot question handlers ──────────────────────────────────────────────────
+  const openBotCreate = () => { setBotEdit(null); setBotForm(emptyBotForm()); setErr(""); setBotModal(true); };
+  const openBotEdit   = (q: BotQ) => {
+    setBotEdit(q);
+    setBotForm({ question: q.question, options: [...q.options], correctAnswerIndex: q.correctAnswerIndex, orderIndex: q.orderIndex, isActive: q.isActive });
+    setErr(""); setBotModal(true);
+  };
+  const saveBotQ = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!botForm.question.trim())             { setErr("Question is required."); return; }
+    if (botForm.options.some((o) => !o.trim())) { setErr("All 4 options must be filled in."); return; }
+    setSaving(true); setErr("");
+    try {
+      const body = { ...botForm, options: botForm.options.map((o) => o.trim()) };
+      if (botEdit) {
+        await apiFetch(`/admin/bot-cert-questions/${botEdit.id}`, { method: "PUT", body: JSON.stringify(body) });
+      } else {
+        await apiFetch("/admin/bot-cert-questions", { method: "POST", body: JSON.stringify(body) });
+      }
+      const data = await apiFetch<{ questions: BotQ[] }>("/admin/bot-cert-questions");
+      setBotQs(data.questions); setBotModal(false);
+    } catch (e2) { setErr(e2 instanceof ApiError ? e2.message : "Save failed."); }
+    finally { setSaving(false); }
+  };
+  const deleteBotQ = async (id: string) => {
+    if (!confirm("Delete this question? Learners who have not yet attempted the quiz will no longer see it.")) return;
+    await apiFetch(`/admin/bot-cert-questions/${id}`, { method: "DELETE" });
+    setBotQs((prev) => prev.filter((q) => q.id !== id));
+  };
+
+  // ── HSKD question handlers ─────────────────────────────────────────────────
+  const openHskdCreate = () => { setHskdEdit(null); setHskdForm(emptyHskdForm()); setErr(""); setHskdModal(true); };
+  const openHskdEdit   = (q: HskdQ) => {
+    setHskdEdit(q); setHskdForm({ scenario: q.scenario, orderIndex: q.orderIndex, isActive: q.isActive });
+    setErr(""); setHskdModal(true);
+  };
+  const saveHskdQ = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!hskdForm.scenario.trim()) { setErr("Scenario is required."); return; }
+    setSaving(true); setErr("");
+    try {
+      const body = { ...hskdForm, scenario: hskdForm.scenario.trim() };
+      if (hskdEdit) {
+        await apiFetch(`/admin/hskd-cert-questions/${hskdEdit.id}`, { method: "PUT", body: JSON.stringify(body) });
+      } else {
+        await apiFetch("/admin/hskd-cert-questions", { method: "POST", body: JSON.stringify(body) });
+      }
+      const data = await apiFetch<{ questions: HskdQ[] }>("/admin/hskd-cert-questions");
+      setHskdQs(data.questions); setHskdModal(false);
+    } catch (e2) { setErr(e2 instanceof ApiError ? e2.message : "Save failed."); }
+    finally { setSaving(false); }
+  };
+  const deleteHskdQ = async (id: string) => {
+    if (!confirm("Delete this scenario?")) return;
+    await apiFetch(`/admin/hskd-cert-questions/${id}`, { method: "DELETE" });
+    setHskdQs((prev) => prev.filter((q) => q.id !== id));
+  };
+
+  if (loading) return <div className="text-sm text-muted-foreground">Loading…</div>;
+
+  const sections: CertSection[] = ["certs", "bot-quiz", "hskd-quiz"];
+  const sectionLabels: Record<CertSection, string> = {
+    "certs":     `Issued Certificates (${certs.length})`,
+    "bot-quiz":  `Bot Cert Questions (${botQs.length})`,
+    "hskd-quiz": `HSKD Cert Scenarios (${hskdQs.length})`,
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Section switcher */}
+      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+        {sections.map((s) => (
+          <button key={s} onClick={() => setSection(s)}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${s === section ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            {sectionLabels[s]}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Issued Certificates ── */}
+      {section === "certs" && (
+        <div>
+          <p className="text-sm text-muted-foreground mb-3">
+            All certificates issued to learners. Click Download to retrieve a PDF.
+          </p>
+          {certs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No certificates issued yet.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b border-border">
+                  {["Type", "Cert #", "Learner", "Vertical", "Issued", ""].map((h) => (
+                    <th key={h} className="pb-2 pr-4 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {certs.map((c) => (
+                  <tr key={c.id} className="border-b border-border/50">
+                    <td className="py-2 pr-4">
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
+                        {typeLabel[c.type] ?? c.type}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 font-mono text-xs">{c.certNumber ?? "—"}</td>
+                    <td className="py-2 pr-4">
+                      {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.userEmail}
+                      <br />
+                      <span className="text-xs text-muted-foreground">{c.userEmail}</span>
+                    </td>
+                    <td className="py-2 pr-4 capitalize text-muted-foreground text-xs">{c.vertical ?? "—"}</td>
+                    <td className="py-2 pr-4 text-muted-foreground text-xs whitespace-nowrap">
+                      {c.issuedAt ? new Date(c.issuedAt).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="py-2">
+                      <a href={`/api/certification/download/${c.id}`} target="_blank" rel="noopener noreferrer"
+                        className="px-3 py-1 text-xs font-medium rounded bg-primary text-primary-foreground hover:bg-primary/90">
+                        Download
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* ── Bot Cert Questions ── */}
+      {section === "bot-quiz" && (
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <p className="text-sm text-muted-foreground">
+              10-question quiz — pass threshold is 8/10. Changes apply immediately to all future attempts.
+            </p>
+            <button onClick={openBotCreate}
+              className="px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">
+              + Add Question
+            </button>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-muted-foreground border-b border-border">
+                {["#", "Question", "Options", "Correct", "Active", ""].map((h) => (
+                  <th key={h} className="pb-2 pr-4 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {botQs.map((q, i) => (
+                <tr key={q.id} className="border-b border-border/50 align-top">
+                  <td className="py-2 pr-4 text-muted-foreground">{q.orderIndex ?? i + 1}</td>
+                  <td className="py-2 pr-4 max-w-xs">{q.question}</td>
+                  <td className="py-2 pr-4 text-xs text-muted-foreground">
+                    {q.options.map((o, oi) => (
+                      <div key={oi}>{oi === q.correctAnswerIndex ? "✓ " : "  "}{o}</div>
+                    ))}
+                  </td>
+                  <td className="py-2 pr-4 text-xs">{q.options[q.correctAnswerIndex] ?? "—"}</td>
+                  <td className="py-2 pr-4">
+                    {q.isActive
+                      ? <span className="text-xs text-green-600">Yes</span>
+                      : <span className="text-xs text-muted-foreground">No</span>}
+                  </td>
+                  <td className="py-2 flex gap-2">
+                    <button onClick={() => openBotEdit(q)}
+                      className="px-2 py-1 text-xs border border-border rounded hover:bg-muted">Edit</button>
+                    <button onClick={() => deleteBotQ(q.id)}
+                      className="px-2 py-1 text-xs border border-destructive/40 text-destructive rounded hover:bg-destructive/10">Del</button>
+                  </td>
+                </tr>
+              ))}
+              {botQs.length === 0 && (
+                <tr><td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                  No questions yet. Run <code className="text-xs bg-muted px-1 rounded">npx tsx scripts/seed-bot-cert.ts</code> to seed 10 default questions.
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+
+          {/* Bot Q modal */}
+          {botModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <form onSubmit={saveBotQ}
+                className="bg-card border border-border rounded-xl p-6 w-full max-w-lg space-y-3 shadow-xl">
+                <h3 className="font-semibold text-foreground">{botEdit ? "Edit Question" : "New Question"}</h3>
+                <div>
+                  <label className="text-xs text-muted-foreground">Question</label>
+                  <textarea value={botForm.question}
+                    onChange={(e) => setBotForm((f) => ({ ...f, question: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 text-sm bg-background border border-border rounded-lg" rows={2} />
+                </div>
+                {[0, 1, 2, 3].map((oi) => (
+                  <div key={oi}>
+                    <label className="text-xs text-muted-foreground flex items-center gap-2">
+                      <input type="radio" name="correct" checked={botForm.correctAnswerIndex === oi}
+                        onChange={() => setBotForm((f) => ({ ...f, correctAnswerIndex: oi }))} />
+                      Option {oi + 1} {botForm.correctAnswerIndex === oi && <span className="text-green-600 text-xs">(correct)</span>}
+                    </label>
+                    <input value={botForm.options[oi] ?? ""}
+                      onChange={(e) => setBotForm((f) => { const o = [...f.options]; o[oi] = e.target.value; return { ...f, options: o }; })}
+                      className="w-full mt-1 px-3 py-1.5 text-sm bg-background border border-border rounded-lg" />
+                  </div>
+                ))}
+                <div className="flex gap-2 items-center">
+                  <label className="text-xs text-muted-foreground">Order index</label>
+                  <input type="number" value={botForm.orderIndex}
+                    onChange={(e) => setBotForm((f) => ({ ...f, orderIndex: parseInt(e.target.value) || 0 }))}
+                    className="w-20 px-2 py-1 text-sm bg-background border border-border rounded-lg" />
+                  <label className="text-xs text-muted-foreground ml-4 flex items-center gap-1">
+                    <input type="checkbox" checked={botForm.isActive}
+                      onChange={(e) => setBotForm((f) => ({ ...f, isActive: e.target.checked }))} /> Active
+                  </label>
+                </div>
+                {err && <p className="text-xs text-destructive">{err}</p>}
+                <div className="flex justify-end gap-2 pt-1">
+                  <button type="button" onClick={() => setBotModal(false)}
+                    className="px-4 py-2 text-sm border border-border rounded-lg">Cancel</button>
+                  <button type="submit" disabled={saving}
+                    className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── HSKD Cert Scenarios ── */}
+      {section === "hskd-quiz" && (
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <p className="text-sm text-muted-foreground">
+              APPROVE/REJECT scenarios — any REJECT flags the submission for admin review. Changes apply immediately.
+            </p>
+            <button onClick={openHskdCreate}
+              className="px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">
+              + Add Scenario
+            </button>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-muted-foreground border-b border-border">
+                {["#", "Scenario", "Active", ""].map((h) => (
+                  <th key={h} className="pb-2 pr-4 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {hskdQs.map((q, i) => (
+                <tr key={q.id} className="border-b border-border/50 align-top">
+                  <td className="py-2 pr-4 text-muted-foreground">{q.orderIndex ?? i + 1}</td>
+                  <td className="py-2 pr-4 text-sm max-w-lg">{q.scenario}</td>
+                  <td className="py-2 pr-4">
+                    {q.isActive
+                      ? <span className="text-xs text-green-600">Yes</span>
+                      : <span className="text-xs text-muted-foreground">No</span>}
+                  </td>
+                  <td className="py-2 flex gap-2">
+                    <button onClick={() => openHskdEdit(q)}
+                      className="px-2 py-1 text-xs border border-border rounded hover:bg-muted">Edit</button>
+                    <button onClick={() => deleteHskdQ(q.id)}
+                      className="px-2 py-1 text-xs border border-destructive/40 text-destructive rounded hover:bg-destructive/10">Del</button>
+                  </td>
+                </tr>
+              ))}
+              {hskdQs.length === 0 && (
+                <tr><td colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                  No HSKD scenarios yet. Add them above to enable HSKD Certification for qualifying users.
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+
+          {/* HSKD Q modal */}
+          {hskdModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <form onSubmit={saveHskdQ}
+                className="bg-card border border-border rounded-xl p-6 w-full max-w-lg space-y-3 shadow-xl">
+                <h3 className="font-semibold text-foreground">{hskdEdit ? "Edit Scenario" : "New Scenario"}</h3>
+                <div>
+                  <label className="text-xs text-muted-foreground">Scenario text</label>
+                  <textarea value={hskdForm.scenario}
+                    onChange={(e) => setHskdForm((f) => ({ ...f, scenario: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 text-sm bg-background border border-border rounded-lg" rows={4}
+                    placeholder="Describe the scenario the user must APPROVE or REJECT…" />
+                </div>
+                <div className="flex gap-2 items-center">
+                  <label className="text-xs text-muted-foreground">Order index</label>
+                  <input type="number" value={hskdForm.orderIndex}
+                    onChange={(e) => setHskdForm((f) => ({ ...f, orderIndex: parseInt(e.target.value) || 0 }))}
+                    className="w-20 px-2 py-1 text-sm bg-background border border-border rounded-lg" />
+                  <label className="text-xs text-muted-foreground ml-4 flex items-center gap-1">
+                    <input type="checkbox" checked={hskdForm.isActive}
+                      onChange={(e) => setHskdForm((f) => ({ ...f, isActive: e.target.checked }))} /> Active
+                  </label>
+                </div>
+                {err && <p className="text-xs text-destructive">{err}</p>}
+                <div className="flex justify-end gap-2 pt-1">
+                  <button type="button" onClick={() => setHskdModal(false)}
+                    className="px-4 py-2 text-sm border border-border rounded-lg">Cancel</button>
+                  <button type="submit" disabled={saving}
+                    className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [tab,            setTab]            = useState<Tab>("users");
@@ -1179,14 +1569,15 @@ export default function AdminPage() {
   if (error) return <div className="p-8 text-destructive">{error}</div>;
 
   const tabLabels: Record<Tab, string> = {
-    users:       `Users (${users.length})`,
-    modules:     `Modules (${modules.length})`,
-    submissions: "Submissions",
-    resources:   "Resources",
-    hskd:        "HSKD Certifications",
-    sync:        "Sync Events",
-    webhooks:    "Webhook Log",
-    provision:   "Provision Client",
+    users:          `Users (${users.length})`,
+    modules:        `Modules (${modules.length})`,
+    submissions:    "Submissions",
+    resources:      "Resources",
+    hskd:           "HSKD Certifications",
+    certifications: "Certifications",
+    sync:           "Sync Events",
+    webhooks:       "Webhook Log",
+    provision:      "Provision Client",
   };
 
   return (
@@ -1303,9 +1694,10 @@ export default function AdminPage() {
           </div>
         )}
 
-        {tab === "submissions" && <TabSubmissions />}
-        {tab === "resources"   && <TabResources />}
-        {tab === "hskd"        && <TabHskdCertifications />}
+        {tab === "submissions"     && <TabSubmissions />}
+        {tab === "resources"       && <TabResources />}
+        {tab === "hskd"            && <TabHskdCertifications />}
+        {tab === "certifications"  && <TabCertifications />}
 
         {tab === "sync" && (
           <div className="overflow-x-auto">
@@ -1413,161 +1805,4 @@ function ProvisionOverride() {
       </form>
     </div>
   );
-}
-
-function TabHskdContent() {
-  const [section, setSection] = React.useState<"scenarios" | "prohibited" | "training">("scenarios")
-  const [industries, setIndustries] = React.useState<any[]>([])
-  const [selectedIndustry, setSelectedIndustry] = React.useState<string>("")
-  const [items, setItems] = React.useState<any[]>([])
-  const [loading, setLoading] = React.useState(false)
-  const [editItem, setEditItem] = React.useState<any | null>(null)
-  const [saving, setSaving] = React.useState(false)
-  const [saveMsg, setSaveMsg] = React.useState("")
-
-  React.useEffect(() => {
-    apiFetch<{ industries: any[] }>("/client/hskd/industries")
-      .then(d => { setIndustries(d.industries); if (d.industries[0]) setSelectedIndustry(d.industries[0].id) })
-      .catch(() => {})
-  }, [])
-
-  React.useEffect(() => {
-    if (!selectedIndustry) return
-    setLoading(true); setItems([]); setEditItem(null)
-    const ep = section === "scenarios"
-      ? `/admin/hskd/scenarios?industry_id=${selectedIndustry}`
-      : section === "prohibited"
-      ? `/admin/hskd/prohibited?industry_id=${selectedIndustry}`
-      : `/admin/hskd/training?industry_id=${selectedIndustry}`
-    apiFetch<any>(ep)
-      .then(d => setItems(d.scenarios ?? d.items ?? d.modules ?? []))
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false))
-  }, [selectedIndustry, section])
-
-  const saveItem = async () => {
-    if (!editItem) return
-    setSaving(true); setSaveMsg("")
-    try {
-      const ep = section === "scenarios"
-        ? `/admin/hskd/scenarios/${editItem.id}`
-        : section === "prohibited"
-        ? `/admin/hskd/prohibited/${editItem.id}`
-        : `/admin/hskd/training/${editItem.id}`
-      await apiFetch(ep, { method: "PATCH", body: JSON.stringify(editItem) })
-      setSaveMsg("Saved ✓")
-      setItems(prev => prev.map(i => i.id === editItem.id ? editItem : i))
-    } catch (err) {
-      setSaveMsg("Save failed")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const inputCls = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-  const taCls = inputCls + " resize-none"
-
-  return (
-    <div className="space-y-4">
-      {/* Section selector */}
-      <div className="flex gap-1 p-1 bg-muted/30 rounded-lg w-fit">
-        {(["scenarios","prohibited","training"] as const).map(s => (
-          <button key={s} onClick={() => setSection(s)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${section === s ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-            {s === "scenarios" ? "Scenarios" : s === "prohibited" ? "Prohibited Items" : "Training Modules"}
-          </button>
-        ))}
-      </div>
-
-      {/* Industry selector */}
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-muted-foreground">Industry:</label>
-        <select value={selectedIndustry} onChange={e => setSelectedIndustry(e.target.value)}
-          className="border border-border rounded-lg px-3 py-1.5 text-sm bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
-          {industries.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-        </select>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${industries.find(i=>i.id===selectedIndustry)?.tier==="TIER_0" ? "bg-red-900/40 text-red-400" : "bg-amber-900/40 text-amber-400"}`}>
-          {industries.find(i=>i.id===selectedIndustry)?.tier}
-        </span>
-      </div>
-
-      {loading ? <p className="text-sm text-muted-foreground py-4">Loading…</p> : (
-        <div className="grid grid-cols-5 gap-4" style={{minHeight: 400}}>
-          {/* List */}
-          <div className="col-span-2 space-y-1">
-            {items.map((item, idx) => (
-              <div key={item.id}
-                onClick={() => setEditItem({...item})}
-                className={`px-3 py-2 rounded-lg cursor-pointer border text-sm ${editItem?.id === item.id ? "border-primary bg-primary/10 text-primary" : "border-border text-foreground hover:bg-muted/40"}`}>
-                <div className="font-medium truncate">
-                  {item.scenario_number || item.item_number || item.module_number
-                    ? `${item.scenario_number ?? item.item_number ?? item.module_number}. ` : ""}
-                  {item.title ?? item.category ?? `Item ${idx + 1}`}
-                </div>
-                {item.is_active === false && <span className="text-xs text-muted-foreground">Hidden</span>}
-              </div>
-            ))}
-            {items.length === 0 && <p className="text-xs text-muted-foreground py-2">No items found.</p>}
-          </div>
-
-          {/* Editor */}
-          <div className="col-span-3">
-            {!editItem ? (
-              <div className="flex items-center justify-center h-full text-sm text-muted-foreground border border-border rounded-xl">
-                Select an item to edit
-              </div>
-            ) : (
-              <div className="space-y-3 border border-border rounded-xl p-4">
-                {section === "scenarios" && (<>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Title</label>
-                    <input type="text" value={editItem.title ?? ""} onChange={e => setEditItem({...editItem, title: e.target.value})} className={inputCls} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">The Scenario</label>
-                    <textarea rows={4} value={editItem.scenario_text ?? ""} onChange={e => setEditItem({...editItem, scenario_text: e.target.value})} className={taCls} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">The Danger</label>
-                    <textarea rows={3} value={editItem.danger_text ?? ""} onChange={e => setEditItem({...editItem, danger_text: e.target.value})} className={taCls} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Prescribed Bot Response</label>
-                    <textarea rows={3} value={editItem.prescribed_bot_response ?? ""} onChange={e => setEditItem({...editItem, prescribed_bot_response: e.target.value})} className={taCls} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Mandatory Bot Action</label>
-                    <textarea rows={2} value={editItem.mandatory_bot_action ?? ""} onChange={e => setEditItem({...editItem, mandatory_bot_action: e.target.value})} className={taCls} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Certification Prompt (shown to client)</label>
-                    <textarea rows={2} value={editItem.certification_prompt ?? ""} onChange={e => setEditItem({...editItem, certification_prompt: e.target.value})} className={taCls} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Ops Note (internal only)</label>
-                    <textarea rows={2} value={editItem.ops_note ?? ""} onChange={e => setEditItem({...editItem, ops_note: e.target.value})} className={taCls} /></div>
-                </>)}
-
-                {section === "prohibited" && (<>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Category</label>
-                    <input type="text" value={editItem.category ?? ""} onChange={e => setEditItem({...editItem, category: e.target.value})} className={inputCls} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Restriction Text</label>
-                    <textarea rows={5} value={editItem.restriction_text ?? ""} onChange={e => setEditItem({...editItem, restriction_text: e.target.value})} className={taCls} /></div>
-                </>)}
-
-                {section === "training" && (<>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Title</label>
-                    <input type="text" value={editItem.title ?? ""} onChange={e => setEditItem({...editItem, title: e.target.value})} className={inputCls} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Content</label>
-                    <textarea rows={8} value={editItem.content ?? ""} onChange={e => setEditItem({...editItem, content: e.target.value})} className={taCls} /></div>
-                  <div><label className="block text-xs font-medium text-muted-foreground mb-1">Video URL (optional)</label>
-                    <input type="url" value={editItem.video_url ?? ""} onChange={e => setEditItem({...editItem, video_url: e.target.value})} className={inputCls} placeholder="https://www.loom.com/share/..." /></div>
-                </>)}
-
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={editItem.is_active ?? true} onChange={e => setEditItem({...editItem, is_active: e.target.checked})} className="w-4 h-4 accent-primary" />
-                  <label className="text-sm text-foreground">Active (visible to clients)</label>
-                </div>
-
-                <div className="flex items-center gap-3 justify-end pt-1">
-                  {saveMsg && <span className={`text-xs ${saveMsg.includes("✓") ? "text-green-400" : "text-destructive"}`}>{saveMsg}</span>}
-                  <button onClick={saveItem} disabled={saving}
-                    className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
-                    {saving ? "Saving…" : "Save Changes →"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
 }
