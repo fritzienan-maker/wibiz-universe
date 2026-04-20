@@ -334,10 +334,6 @@ function TabHskdCertifications() {
 
   const doSignoff = async (certId: string) => {
     if (!signoffName.trim()) { setSignoffErr("Enter your name to sign off."); return; }
-    const items = checklistItems(certs.find((c) => c.id === certId)!);
-    const checked = checklist[certId] ?? [];
-    const unchecked = items.filter((_, i) => !checked[i]);
-    if (unchecked.length > 0) { setSignoffErr(`Please check all items: ${unchecked[0]}`); return; }
     setSigningOff(true);
     setSignoffErr("");
     try {
@@ -351,6 +347,7 @@ function TabHskdCertifications() {
       setDetail(data);
     } catch (err) {
       setSignoffErr(err instanceof ApiError ? err.message : "Sign-off failed.");
+      setSigningOff(false);
     } finally {
       setSigningOff(false);
     }
